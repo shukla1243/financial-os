@@ -169,10 +169,26 @@ export default function Onboarding() {
     } finally { setLoading(false); }
   };
 
-  const skipOnboarding = () => {
-    if (geminiKey) dispatch({ type: 'SET_GEMINI_KEY', payload: geminiKey });
-    dispatch({ type: 'SET_ONBOARDED', payload: { name: 'Shreyansh', profession: 'Designer', goals: [], personality: 'balanced', welcomeNote: "Let's build some wealth! 🚀", theme: THEME_PRESETS.freelancer } });
-  };
+ const skipOnboarding = () => {
+  if (geminiKey) {
+    dispatch({
+      type: 'SET_GEMINI_KEY',
+      payload: geminiKey
+    });
+  }
+
+  dispatch({
+    type: 'SET_ONBOARDED',
+    payload: {
+      name: '',
+      profession: '',
+      goals: [],
+      personality: '',
+      welcomeNote: 'Welcome to Financial OS! 🚀',
+      theme: THEME_PRESETS.cyberpunk
+    }
+  });
+};
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-main)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
