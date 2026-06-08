@@ -99,7 +99,18 @@ export async function saveConfig(proxyUrl, email, values) {
 }
 
 export async function completeOnboarding(proxyUrl, email, profile) {
-  return proxyPost(proxyUrl, 'completeOnboarding', email, profile);
+  let lastError;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const result = await proxyPost(proxyUrl, 'completeOnboarding', email, profile);
+      if (result?.success) return result;
+      lastError = new Error(result?.error || 'Could not save onboarding.');
+    } catch (error) {
+      lastError = error;
+    }
+    if (attempt === 0) await new Promise(resolve => setTimeout(resolve, 750));
+  }
+  throw lastError || new Error('Could not save onboarding.');
 }
 
 export async function proxyAI(proxyUrl, email, request) {

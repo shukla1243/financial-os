@@ -4,6 +4,7 @@
  */
 import { callAI } from './aiService';
 import { getThemeKey } from './userStorage';
+import { extractJsonObject } from './aiJson';
 
 export const THEME_PRESETS = {
   cyberpunk: {
@@ -108,6 +109,20 @@ export function personalizeTheme(theme, seed) {
     primaryColor: `hsl(${hue}, 72%, 58%)`,
     accentColor: `hsl(${(hue + 47) % 360}, 78%, 55%)`,
     shadowIntensity: `hsla(${hue}, 72%, 45%, 0.16)`,
+  };
+}
+
+export function normalizeTheme(theme, fallback = THEME_PRESETS.freelancer) {
+  if (!theme || typeof theme !== 'object') return { ...fallback };
+  const allowedLayouts = ['left-sidebar', 'right-sidebar', 'topbar'];
+  const allowedCursors = ['chalk', 'terminal', 'sakura', 'precision', 'normal'];
+  const allowedDecorations = ['scanlines', 'blueprint-grid', 'falling-sakura', 'chalkboard-dust', 'none'];
+  return {
+    ...fallback,
+    ...theme,
+    layout: allowedLayouts.includes(theme.layout) ? theme.layout : fallback.layout,
+    cursor: allowedCursors.includes(theme.cursor) ? theme.cursor : fallback.cursor,
+    decorations: allowedDecorations.includes(theme.decorations) ? theme.decorations : fallback.decorations,
   };
 }
 
@@ -267,8 +282,7 @@ Respond ONLY with a JSON object matching this structure (no markdown, no backtic
       key: geminiKey
     });
     const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    const cleaned = raw.replace(/```json|```/g, '').trim();
-    return JSON.parse(cleaned);
+    return normalizeTheme(extractJsonObject(raw));
   } catch (err) {
     console.error('[themeEngine] Failed to generate AI theme', err);
     return null;

@@ -2,8 +2,9 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { Send, Zap, Loader } from 'lucide-react';
 import { callAI } from '../services/aiService';
-import { generateThemeFromVibe, personalizeTheme, THEME_PRESETS } from '../services/themeEngine';
+import { generateThemeFromVibe, normalizeTheme, personalizeTheme, THEME_PRESETS } from '../services/themeEngine';
 import { clearOnboardingDraft, readOnboardingDraft, writeOnboardingDraft } from '../services/userStorage';
+import { extractJsonObject } from '../services/aiJson';
 
 const AI_UNAVAILABLE = "I'm having trouble reaching AI services right now";
 const isTransientAIMessage = text => {
@@ -126,8 +127,7 @@ export default function Onboarding() {
       conversationRef.current.push({ role: 'model', parts: [{ text: aiText }] });
 
       if (aiText.includes('PROFILE_COMPLETE:')) {
-        const jsonStr = aiText.split('PROFILE_COMPLETE:')[1].trim();
-        const profile = JSON.parse(jsonStr);
+        const profile = extractJsonObject(aiText, 'PROFILE_COMPLETE:');
 
         // Show welcome message
         setMessages(prev => [...prev, { role: 'ai', text: profile.welcomeNote + " Generating your custom theme..." }]);
@@ -176,7 +176,7 @@ export default function Onboarding() {
         }
 
         profile.theme = personalizeTheme(
-          generatedTheme,
+          normalizeTheme(generatedTheme),
           `${state.user?.sub || ''}:${profile.personality || ''}:${profile.profession || ''}`
         );
 
