@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import { getAdminRegistry, toggleUserStatus } from '../services/proxyService';
+import { getAdminRegistry, toggleUserPlan, toggleUserStatus } from '../services/proxyService';
 import { Users, UserCheck, UserX, ExternalLink, Search, RefreshCw, AlertTriangle, ShieldAlert, Shield, Loader, Mail, Calendar, CheckCircle } from 'lucide-react';
 
 const S = {
@@ -80,6 +80,22 @@ export default function AdminDashboard() {
       }
     } catch (err) {
       setError(err.message || 'An error occurred during status update.');
+    } finally {
+      setUpdatingUser(null);
+    }
+  };
+
+  const handleTogglePlan = async (targetEmail, currentPlan) => {
+    const nextPlan = currentPlan === 'Pro' ? 'Free' : 'Pro';
+    setUpdatingUser(targetEmail);
+    setError('');
+    try {
+      const res = await toggleUserPlan(state.sheetsConfig.proxyUrl, state.user.email, targetEmail, nextPlan);
+      if (!res.success) throw new Error(res.error || 'Failed to update plan.');
+      setUsers(prev => prev.map(user => user.email === targetEmail ? { ...user, plan: nextPlan } : user));
+      setSuccessMessage(`${targetEmail} is now on the ${nextPlan} plan.`);
+    } catch (err) {
+      setError(err.message || 'Could not update plan.');
     } finally {
       setUpdatingUser(null);
     }
@@ -201,6 +217,7 @@ export default function AdminDashboard() {
                   <th style={{ padding: '12px 8px', fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, letterSpacing: '0.5px' }}>LAST ACTIVE</th>
                   <th style={{ padding: '12px 8px', fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, letterSpacing: '0.5px' }}>SPREADSHEET</th>
                   <th style={{ padding: '12px 8px', fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, letterSpacing: '0.5px' }}>STATUS</th>
+                  <th style={{ padding: '12px 8px', fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, letterSpacing: '0.5px' }}>PLAN</th>
                   <th style={{ padding: '12px 8px', fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, letterSpacing: '0.5px', textAlign: 'right' }}>ACTIONS</th>
                 </tr>
               </thead>
@@ -306,6 +323,16 @@ export default function AdminDashboard() {
                         }}>
                           {user.status?.toUpperCase() || 'UNKNOWN'}
                         </span>
+                      </td>
+
+                      <td style={{ padding: '14px 8px' }}>
+                        <button
+                          onClick={() => handleTogglePlan(user.email, user.plan || 'Free')}
+                          disabled={isUpdating}
+                          style={{ background: user.plan === 'Pro' ? '#7c3aed20' : 'transparent', color: user.plan === 'Pro' ? '#c4b5fd' : 'var(--text-muted)', border: '1px solid #7c3aed40', borderRadius: '6px', padding: '5px 10px', fontSize: '10px', fontWeight: 700, cursor: isUpdating ? 'not-allowed' : 'pointer' }}
+                        >
+                          {user.plan === 'Pro' ? 'PRO' : 'FREE'}
+                        </button>
                       </td>
 
                       {/* Actions Column */}

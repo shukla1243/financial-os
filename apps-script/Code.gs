@@ -20,7 +20,7 @@ const OPENROUTER_MODELS = [
   'openrouter/free',
 ];
 const ALLOWED_ACTIONS = [
-  'initUser', 'getUserStatus', 'getAdminRegistry', 'toggleUserStatus',
+  'initUser', 'getUserStatus', 'getAdminRegistry', 'toggleUserStatus', 'toggleUserPlan',
   'getConfig', 'setConfig', 'setConfigBatch', 'completeOnboarding',
   'getExpenses', 'logExpense', 'deleteExpense', 'getIncome', 'logIncome',
   'getGoals', 'setGoals', 'getBills', 'setBills', 'getMemory', 'logMemory',
@@ -45,7 +45,7 @@ const SCHEMAS = {
   Blueprint:       ['Email', 'SectionID', 'Name', 'Icon', 'SheetRef', 'Status', 'CreatedOn'],
 };
 
-const REGISTRY_SCHEMA = ['Email', 'UserID', 'Name', 'SpreadsheetID', 'SpreadsheetURL', 'Status', 'CreatedOn', 'LastActiveOn', 'Reason'];
+const REGISTRY_SCHEMA = ['Email', 'UserID', 'Name', 'SpreadsheetID', 'SpreadsheetURL', 'Status', 'CreatedOn', 'LastActiveOn', 'Reason', 'Plan'];
 
 // ─── ENTRY POINT ──────────────────────────────────────────────────────────────
 
@@ -79,8 +79,22 @@ function doPost(e) {
       return jsonResponse(toggleUserStatus(data.targetEmail, data.status));
     }
 
+    if (action === 'toggleUserPlan') {
+      if (email.toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
+        return jsonResponse({ success: false, error: 'Unauthorized: Admin access required.' });
+      }
+      return jsonResponse(toggleUserPlan(data.targetEmail, data.plan));
+    }
+
     if (action === 'getUserStatus') {
       return jsonResponse(getUserStatusAction(email));
+    }
+
+    if ((action === 'setConfig' && data?.key === 'ThemeJSON') ||
+        (action === 'setConfigBatch' && data && Object.prototype.hasOwnProperty.call(data, 'ThemeJSON'))) {
+      if (!hasThemeCustomizationAccess(email)) {
+        return jsonResponse({ success: false, error: 'Theme customization requires the Pro plan.' });
+      }
     }
 
     // 3. User operations: Get or create dedicated user Spreadsheet ID
@@ -287,7 +301,8 @@ function getUserSpreadsheetIdUnlocked(userId, email, name) {
     'Active',
     todayStr,
     todayStr,
-    ''
+    '',
+    'Free'
   ])]);
 
   return newSsId;
@@ -307,6 +322,7 @@ function ensureRegistrySchema(registrySheet) {
     registrySheet.getRange(1, 1, 1, REGISTRY_SCHEMA.length).setValues([REGISTRY_SCHEMA]);
   }
   registrySheet.setFrozenRows(1);
+  registrySheet.getRange(1, 1, 1, REGISTRY_SCHEMA.length).setValues([REGISTRY_SCHEMA]);
   if (registrySheet.getLastRow() >= 2) {
     registrySheet.getRange(2, 2, registrySheet.getLastRow() - 1, 1).setNumberFormat('@');
   }
@@ -450,6 +466,7 @@ function getAdminRegistry() {
     if (!registrySheet) {
       return { success: true, data: [] };
     }
+    ensureRegistrySchema(registrySheet);
     const lastRow = registrySheet.getLastRow();
     if (lastRow < 2) return { success: true, data: [] };
 
@@ -464,7 +481,8 @@ function getAdminRegistry() {
         spreadsheetUrl: registryData[i][4],
         status: registryData[i][5],
         createdOn: registryData[i][6],
-        lastActiveOn: registryData[i][7]
+        lastActiveOn: registryData[i][7],
+        plan: registryData[i][9] || 'Free'
       });
     }
     return { success: true, data };
@@ -497,24 +515,52 @@ function toggleUserStatus(targetEmail, status, reason = '') {
   }
 }
 
+function toggleUserPlan(targetEmail, plan) {
+  try {
+    if (!['Free', 'Pro'].includes(plan)) return { success: false, error: 'Invalid plan.' };
+    const masterSs = getSpreadsheet();
+    const registrySheet = masterSs.getSheetByName('_Registry');
+    if (!registrySheet) return { success: false, error: 'Registry not found.' };
+    ensureRegistrySchema(registrySheet);
+    const lastRow = registrySheet.getLastRow();
+    const registryData = registrySheet.getRange(1, 1, lastRow, REGISTRY_SCHEMA.length).getValues();
+    for (let i = 1; i < registryData.length; i++) {
+      if (registryData[i][0].toString().toLowerCase() === targetEmail.toLowerCase()) {
+        registrySheet.getRange(i + 1, 10).setValue(plan);
+        return { success: true, plan };
+      }
+    }
+    return { success: false, error: 'User not found in registry.' };
+  } catch (err) {
+    return { success: false, error: err.toString() };
+  }
+}
+
+function hasThemeCustomizationAccess(email) {
+  if (ADMIN_EMAIL && email.toLowerCase() === ADMIN_EMAIL.toLowerCase()) return true;
+  const status = getUserStatusAction(email);
+  return status.success && status.plan === 'Pro';
+}
+
 function getUserStatusAction(email) {
   try {
     const masterSs = getSpreadsheet();
     let registrySheet = masterSs.getSheetByName('_Registry');
-    if (!registrySheet) return { success: true, status: 'Active' };
+    if (!registrySheet) return { success: true, status: 'Active', plan: 'Free' };
 
     const lastRow = registrySheet.getLastRow();
-    if (lastRow < 2) return { success: true, status: 'Active' };
+    if (lastRow < 2) return { success: true, status: 'Active', plan: 'Free' };
 
     const registryData = registrySheet.getRange(1, 1, lastRow, REGISTRY_SCHEMA.length).getValues();
     for (let i = 1; i < registryData.length; i++) {
       if (registryData[i][0].toString().toLowerCase() === email.toLowerCase()) {
         const status = registryData[i][5]?.toString() || 'Active';
         const reason = registryData[i][8]?.toString() || ''; // Optional Column 9 for Reason
-        return { success: true, status, reason };
+        const plan = registryData[i][9]?.toString() || 'Free';
+        return { success: true, status, reason, plan };
       }
     }
-    return { success: true, status: 'Active' };
+    return { success: true, status: 'Active', plan: 'Free' };
   } catch (err) {
     return { success: false, error: err.toString() };
   }

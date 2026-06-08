@@ -1,4 +1,4 @@
-import { normalizeTheme, personalizeTheme, THEME_PRESETS } from './themeEngine';
+import { chooseLatestTheme, normalizeTheme, personalizeTheme, THEME_PRESETS } from './themeEngine';
 
 test('creates stable user-specific theme colors without mutating the preset', () => {
   const first = personalizeTheme(THEME_PRESETS.cyberpunk, 'google-sub-a');
@@ -43,4 +43,10 @@ test('rejects executable or unknown visual direction values', () => {
   const theme = normalizeTheme({ motionStyle: '<script>', navStyle: 'javascript:alert(1)' });
   expect(theme.motionStyle).toBe('float');
   expect(theme.navStyle).toBe('bar');
+});
+
+test('keeps the newest theme during local and server sync conflicts', () => {
+  const local = { themeName: 'Local', updatedAt: '2026-06-09T10:00:00.000Z' };
+  const server = { themeName: 'Server', updatedAt: '2026-06-09T09:00:00.000Z' };
+  expect(chooseLatestTheme(local, server).themeName).toBe('Local');
 });

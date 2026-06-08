@@ -31,6 +31,7 @@ export default function Settings() {
   const { state, syncFromSheets, updateTheme, saveSettings, addNewCategory } = useApp();
   const [vibePrompt, setVibePrompt] = useState('');
   const [generatingTheme, setGeneratingTheme] = useState(false);
+  const [themeError, setThemeError] = useState('');
   const [budgets, setBudgets] = useState({ ...state.config.budgets });
   const [salary, setSalary] = useState(state.config.salary);
   const [homeIncome, setHomeIncome] = useState(state.config.homeIncome);
@@ -90,13 +91,18 @@ export default function Settings() {
 
   const handleGenerateAITheme = async () => {
     if (!vibePrompt.trim()) return;
+    setThemeError('');
     setGeneratingTheme(true);
     const generated = await generateThemeFromVibe(state.geminiKey, vibePrompt);
     setGeneratingTheme(false);
     if (generated) {
-      updateTheme(generated);
-      setVibePrompt('');
-      flash('theme_gen');
+      try {
+        await updateTheme(generated);
+        setVibePrompt('');
+        flash('theme_gen');
+      } catch (error) {
+        setThemeError(error.message || 'Could not save the generated theme.');
+      }
     }
   };
 
@@ -109,6 +115,7 @@ export default function Settings() {
   const score = state.financialHealthScore;
   const scoreValue = score ?? 0;
   const scoreColor = score === null ? '#64748b' : score >= 80 ? '#10b981' : score >= 60 ? '#f59e0b' : '#ef4444';
+  const canCustomizeTheme = state.isAdmin || state.plan === 'Pro';
 
   return (
     <div className="settings-page anime-page" style={{ maxWidth: '900px', width: '100%' }}>
@@ -239,7 +246,7 @@ export default function Settings() {
                 const preset = THEME_PRESETS[key];
                 const active = state.config.theme?.themeName === preset.themeName;
                 return (
-                  <button key={key} type="button" onClick={() => updateTheme(preset)} className={`theme-loadout ${active ? 'theme-loadout--active' : ''}`} style={{ '--theme-primary': preset.primaryColor, '--theme-accent': preset.accentColor, '--theme-bg': preset.bgMain }}>
+                  <button key={key} type="button" disabled={!canCustomizeTheme} onClick={() => updateTheme(preset).catch(error => setThemeError(error.message))} className={`theme-loadout ${active ? 'theme-loadout--active' : ''}`} style={{ '--theme-primary': preset.primaryColor, '--theme-accent': preset.accentColor, '--theme-bg': preset.bgMain, opacity: canCustomizeTheme ? 1 : 0.5 }}>
                     <span className="theme-loadout__swatch" />
                     <span><strong>{preset.themeName}</strong><small>{preset.decorations.replace('-', ' ')}</small></span>
                     {active && <Check size={14} />}
@@ -250,16 +257,17 @@ export default function Settings() {
           </div>
           <div className="theme-director">
             <div>
-              <strong>AI VISUAL DIRECTOR</strong>
-              <span>Describe a world. The AI safely composes colors, surfaces, panel geometry, motion, density, navigation, atmosphere, and hero behavior.</span>
+              <strong>AI VISUAL DIRECTOR · {canCustomizeTheme ? 'PRO ACTIVE' : 'PRO FEATURE'}</strong>
+              <span>{canCustomizeTheme ? 'Describe a world. The AI safely composes colors, surfaces, panel geometry, motion, density, navigation, atmosphere, and hero behavior.' : 'Your onboarding-generated persona theme remains active. Ask an admin to enable Pro for theme switching and generation.'}</span>
             </div>
             <div>
-              <input value={vibePrompt} onChange={e => setVibePrompt(e.target.value)} placeholder="e.g. quiet moonlit observatory with calm motion" />
-              <button type="button" onClick={handleGenerateAITheme} disabled={generatingTheme || !vibePrompt.trim()}>
+              <input disabled={!canCustomizeTheme} value={vibePrompt} onChange={e => setVibePrompt(e.target.value)} placeholder="e.g. quiet moonlit observatory with calm motion" />
+              <button type="button" onClick={handleGenerateAITheme} disabled={!canCustomizeTheme || generatingTheme || !vibePrompt.trim()}>
                 {generatingTheme ? <div className="spinner spinner-sm" /> : <Zap size={14} />}
                 {generatingTheme ? 'Directing...' : 'Generate full UI'}
               </button>
             </div>
+            {themeError && <div style={{ marginTop: '8px', color: '#ef4444', fontSize: '10px' }}>{themeError}</div>}
           </div>
         </div>
       </Section>

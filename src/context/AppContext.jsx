@@ -20,6 +20,7 @@ import { clearLegacyStorage, getStableUserId, readUserState, writeUserState } fr
 import { calculateFinancialHealth } from '../services/financialHealth';
 import { isValidMemoryObservation } from '../services/memoryGuard';
 import { restoreAuthenticatedUser } from '../services/googleAuth';
+import { chooseLatestTheme, normalizeTheme } from '../services/themeEngine';
 
 const AppContext = createContext();
 
@@ -29,6 +30,7 @@ export const createDefaultState = () => ({
     isLoggedIn: false,
     isAuthReady: false,
     isSessionReady: false,
+    sessionEntryAllowed: false,
     initializationError: '',
 
     // Onboarding
@@ -78,6 +80,7 @@ export const createDefaultState = () => ({
     xp: 0,
     financialHealthScore: null,
     isAdmin: false,
+    plan: 'Free',
   });
 
 const getInitialState = () => {
@@ -104,6 +107,7 @@ function reducer(state, action) {
         isLoggedIn: true,
         isAuthReady: true,
         isSessionReady: false,
+        sessionEntryAllowed: action.payload.allowInit === true,
         onboardingStatus: 'unknown',
         isAdmin: false,
         sheetsConfig: { proxyUrl: PROXY_URL, connected: false },
@@ -117,6 +121,8 @@ function reducer(state, action) {
       return { ...state, initializationError: action.payload || '' };
     case 'SET_SESSION_READY':
       return { ...state, isSessionReady: action.payload === true };
+    case 'SET_SESSION_ENTRY_ALLOWED':
+      return { ...state, sessionEntryAllowed: action.payload === true };
     case 'SET_ONBOARDED':
       return { 
         ...state, 
@@ -200,11 +206,14 @@ function reducer(state, action) {
       return { ...state, badges: [...(state.badges || []), action.payload] };
     case 'SET_HEALTH_SCORE':
       return { ...state, financialHealthScore: action.payload };
+    case 'SET_PLAN':
+      return { ...state, plan: action.payload === 'Pro' ? 'Pro' : 'Free' };
     case 'LOAD_FROM_PROXY': {
       let parsedTheme = null;
       if (action.payload.config?.ThemeJSON) {
         try { parsedTheme = JSON.parse(action.payload.config.ThemeJSON); } catch(e){}
       }
+      const selectedTheme = chooseLatestTheme(state.config.theme, parsedTheme);
       return {
         ...state,
         tracker: action.payload.tracker || [],
@@ -216,7 +225,7 @@ function reducer(state, action) {
         config: {
           ...state.config,
           ...(action.payload.config || {}),
-          theme: parsedTheme || state.config.theme || {
+          theme: selectedTheme || {
             bgMain: 'var(--bg-main)',
             bgCard: 'var(--bg-card)',
             bgSidebar: 'var(--bg-sidebar)',
@@ -236,6 +245,7 @@ function reducer(state, action) {
         onboardingStatus: action.payload.isOnboarded === true ? 'complete' : 'incomplete',
         user: state.user ? { ...state.user, onboardingCompleted: action.payload.isOnboarded === true } : state.user,
         isAdmin: action.payload.isAdmin === true,
+        plan: action.payload.plan === 'Pro' ? 'Pro' : state.plan,
       };
     }
     case 'SET_SUSPENDED':
@@ -312,7 +322,7 @@ export function AppProvider({ children }) {
     restoreAuthenticatedUser()
       .then(user => {
         if (!active) return;
-        if (user) dispatch({ type: 'SWITCH_USER', payload: { user, cached: readUserState(user) } });
+        if (user) dispatch({ type: 'SWITCH_USER', payload: { user, cached: readUserState(user), allowInit: false } });
         else dispatch({ type: 'SET_AUTH_READY' });
       })
       .catch(() => {
@@ -326,7 +336,7 @@ export function AppProvider({ children }) {
   useEffect(() => {
     const email = state.user?.email;
     const userId = getStableUserId(state.user);
-    if (!email || !userId || !PROXY_URL || autoInitRef.current === userId) return;
+    if (!state.sessionEntryAllowed || !email || !userId || !PROXY_URL || autoInitRef.current === userId) return;
     autoInitRef.current = userId;
     consciousnessScanRef.current = '';
     lastDriveUpdateRef.current = 0;
@@ -340,6 +350,7 @@ export function AppProvider({ children }) {
         try {
           const { getUserStatus } = await import('../services/proxyService');
           const statusRes = await getUserStatus(PROXY_URL, email);
+          if (statusRes.success) dispatch({ type: 'SET_PLAN', payload: statusRes.plan });
           if (statusRes.success && statusRes.status === 'Suspended') {
             isUserSuspended = true;
             suspendReasonText = statusRes.reason || 'Account suspended by administrator.';
@@ -354,8 +365,10 @@ export function AppProvider({ children }) {
         try {
           const { getStoredTheme, applyDynamicTheme } = await import('../services/themeEngine');
           const storedTheme = getStoredTheme(userId);
-          applyDynamicTheme(storedTheme);
-          dispatch({ type: 'SET_CONFIG', payload: { theme: storedTheme } });
+          if (storedTheme) {
+            applyDynamicTheme(storedTheme);
+            dispatch({ type: 'SET_CONFIG', payload: { theme: storedTheme } });
+          }
         } catch (themeErr) {}
 
         // Mark as connected
@@ -369,7 +382,9 @@ export function AppProvider({ children }) {
               const serverTheme = JSON.parse(data.config.ThemeJSON);
               if (serverTheme && Object.keys(serverTheme).length > 0) {
                 const { setStoredTheme } = await import('../services/themeEngine');
-                setStoredTheme(userId, serverTheme);
+                const latestTheme = chooseLatestTheme(state.config.theme, serverTheme);
+                setStoredTheme(userId, latestTheme);
+                data.config.ThemeJSON = JSON.stringify(latestTheme);
               }
             } catch (themeError) {}
           }
@@ -394,7 +409,7 @@ export function AppProvider({ children }) {
     };
 
     autoInit();
-  }, [state.user?.sub, state.user?.email]);
+  }, [state.sessionEntryAllowed, state.user?.sub, state.user?.email]);
 
   // Save only to the authenticated user's scoped cache.
   useEffect(() => {
@@ -664,19 +679,22 @@ export function AppProvider({ children }) {
 
   // ─── UPDATE DYNAMIC THEME ──────────────────────────────────────────────────
   const updateTheme = useCallback(async (newTheme) => {
-    dispatch({ type: 'SET_CONFIG', payload: { theme: newTheme } });
+    if (!state.isAdmin && state.plan !== 'Pro') throw new Error('AI Visual Director is available on the Pro plan.');
+    const timestampedTheme = normalizeTheme({ ...newTheme, updatedAt: new Date().toISOString() });
+    dispatch({ type: 'SET_CONFIG', payload: { theme: timestampedTheme } });
     const userId = getStableUserId(state.user);
     if (userId) {
       const { setStoredTheme } = await import('../services/themeEngine');
-      setStoredTheme(userId, newTheme);
+      setStoredTheme(userId, timestampedTheme);
     }
     const { proxyUrl, connected } = state.sheetsConfig;
     const email = state.user?.email;
     if (connected && proxyUrl && email) {
-      const { upsertConfig } = await import('../services/proxyService');
-      await upsertConfig(proxyUrl, email, 'ThemeJSON', JSON.stringify(newTheme)).catch(() => {});
+      const result = await proxySaveConfig(proxyUrl, email, { ThemeJSON: JSON.stringify(timestampedTheme) });
+      if (!result?.success) throw new Error(result?.error || 'Could not save your theme.');
     }
-  }, [state.sheetsConfig, state.user]);
+    return timestampedTheme;
+  }, [state.sheetsConfig, state.user, state.isAdmin, state.plan]);
 
   const completeOnboarding = useCallback(async (profile) => {
     const { proxyUrl } = state.sheetsConfig;

@@ -1,8 +1,9 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useParams, Link, useLocation, useNavigate } from 'react-router-dom';
 import { AppProvider, useApp } from './context/AppContext';
 
 import Login from './pages/Login';
+import SignIn from './pages/SignIn';
 import Onboarding from './pages/Onboarding';
 import Dashboard from './pages/Dashboard';
 import AILogger from './pages/AILogger';
@@ -218,6 +219,7 @@ import useInjectLogout from './hooks/useInjectLogout';
 function AppShell() {
   const { state, dispatch } = useApp();
   const theme = state.config?.theme;
+  const [publicView, setPublicView] = useState('landing');
 
   // Run dynamic logout button injection
   useInjectLogout();
@@ -231,7 +233,13 @@ function AppShell() {
   }, [theme]);
 
   const handleLogin = (user) => {
-    dispatch({ type: 'SWITCH_USER', payload: { user, cached: readUserState(user) } });
+    dispatch({ type: 'SWITCH_USER', payload: { user, cached: readUserState(user), allowInit: true } });
+    setPublicView('app');
+  };
+
+  const openSignIn = () => {
+    dispatch({ type: 'SET_SESSION_ENTRY_ALLOWED', payload: true });
+    setPublicView('signin');
   };
 
   const handleLogout = () => {
@@ -240,12 +248,10 @@ function AppShell() {
     window.location.reload();
   };
 
-  if (!state.isAuthReady) {
-    return (
-      <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: 'var(--bg-main)', color: 'var(--text-muted)' }}>
-        Restoring your secure session...
-      </div>
-    );
+  if (publicView === 'landing') return <Login onEnter={openSignIn} />;
+
+  if (publicView === 'signin') {
+    return <SignIn restoredUser={state.isLoggedIn ? state.user : null} sessionReady={state.isSessionReady} onBack={() => setPublicView('landing')} onLogin={handleLogin} onContinue={() => setPublicView('app')} />;
   }
 
   if (state.isSuspended) {
@@ -253,7 +259,7 @@ function AppShell() {
   }
 
   if (!state.isLoggedIn) {
-    return <Login onLogin={handleLogin} />;
+    return <SignIn restoredUser={null} sessionReady={false} onBack={() => setPublicView('landing')} onLogin={handleLogin} />;
   }
 
   if (!state.isSessionReady) {

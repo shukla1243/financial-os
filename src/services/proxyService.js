@@ -253,3 +253,7 @@ export async function getAdminRegistry(proxyUrl, email) {
 export async function toggleUserStatus(proxyUrl, email, targetEmail, status) {
   return proxyPost(proxyUrl, 'toggleUserStatus', email, { targetEmail, status });
 }
+
+export async function toggleUserPlan(proxyUrl, email, targetEmail, plan) {
+  return proxyPost(proxyUrl, 'toggleUserPlan', email, { targetEmail, plan });
+}

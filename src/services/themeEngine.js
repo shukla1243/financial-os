@@ -160,6 +160,15 @@ export function personalizeTheme(theme, seed) {
   };
 }
 
+export function chooseLatestTheme(localTheme, serverTheme) {
+  if (!localTheme) return serverTheme || null;
+  if (!serverTheme) return localTheme;
+  const localTime = Date.parse(localTheme.updatedAt || '') || 0;
+  const serverTime = Date.parse(serverTheme.updatedAt || '') || 0;
+  if (localTime === serverTime) return serverTheme;
+  return localTime > serverTime ? localTheme : serverTheme;
+}
+
 export function normalizeTheme(theme, fallback = THEME_PRESETS.freelancer) {
   if (!theme || typeof theme !== 'object') theme = {};
   const allowedLayouts = ['left-sidebar', 'right-sidebar', 'topbar'];
@@ -300,7 +309,7 @@ export function applyDynamicTheme(theme) {
  */
 export function getStoredTheme(userId) {
   const key = getThemeKey(userId);
-  if (!key) return THEME_PRESETS.cyberpunk;
+  if (!key) return null;
   try {
     let val = localStorage.getItem(key);
     if (!val) {
@@ -310,9 +319,9 @@ export function getStoredTheme(userId) {
         localStorage.removeItem(`financial_os_theme_${userId}`);
       }
     }
-    return val ? JSON.parse(val) : THEME_PRESETS.cyberpunk;
+    return val ? JSON.parse(val) : null;
   } catch (e) {
-    return THEME_PRESETS.cyberpunk;
+    return null;
   }
 }
 
