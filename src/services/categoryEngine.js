@@ -16,6 +16,7 @@ const CANONICAL_CATEGORY_KEYWORDS = {
   Transport: [
     'transport', 'petrol', 'diesel', 'fuel', 'uber', 'ola', 'auto',
     'taxi', 'cab', 'bus', 'train', 'metro', 'commute', 'parking', 'toll',
+    'vehicle', 'bike', 'car', 'scooter', 'service', 'repair', 'tyre',
   ],
   Housing: [
     'housing', 'rent', 'maintenance', 'electricity', 'water bill',

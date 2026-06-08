@@ -48,7 +48,7 @@ function GoalCard({ goal, onUpdate, delay = 0 }) {
   };
 
   return (
-    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '20px', animation: 'slideUp 0.4s ease-out both', animationDelay: `${delay}s`, borderTop:`2px solid ${color}` }}>
+    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '20px', borderTop:`2px solid ${color}` }}>
       {/* Top row */}
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'16px' }}>
         <div>
@@ -165,7 +165,7 @@ export default function SavingsGoals() {
   };
 
   return (
-    <div style={{ animation: 'slideUp 0.35s ease-out' }}>
+    <div>
       {/* Header */}
       <div style={{ marginBottom: '24px' }}>
         <div style={{ fontSize:'10px', color:'var(--text-muted)', letterSpacing:'1.5px', marginBottom:'4px' }}>GOALS</div>
@@ -201,25 +201,25 @@ export default function SavingsGoals() {
           <div style={{ display: 'grid', gap: '12px', gridTemplateColumns: '1fr 1fr' }}>
             <div>
               <label style={{ fontSize:'10px', color:'var(--text-muted)', letterSpacing:'1px', display:'block', marginBottom:'6px' }}>GOAL NAME</label>
-              <input value={newGoal.name} onChange={e => setNewGoal(g => ({...g, name:e.target.value}))}
+              <input value={newGoal.name} onChange={e => setNewGoal(g => ({...g, name:e.target.value}))} autoComplete="off" spellCheck={false}
                 placeholder="e.g. New Laptop" style={{ width:'100%', padding:'8px 12px', borderRadius:'8px',
                   background:'var(--bg-card)', border:'1px solid var(--border-color)', color:'var(--text-main)', fontSize:'12px', outline:'none', boxSizing:'border-box' }} />
             </div>
             <div>
               <label style={{ fontSize:'10px', color:'var(--text-muted)', letterSpacing:'1px', display:'block', marginBottom:'6px' }}>TARGET (₹)</label>
-              <input value={newGoal.target} onChange={e => setNewGoal(g => ({...g, target:e.target.value}))}
+              <input value={newGoal.target} onChange={e => setNewGoal(g => ({...g, target:e.target.value}))} autoComplete="off"
                 placeholder="e.g. 80000" type="number" style={{ width:'100%', padding:'8px 12px', borderRadius:'8px',
                   background:'var(--bg-card)', border:'1px solid var(--border-color)', color:'var(--text-main)', fontSize:'12px', outline:'none', boxSizing:'border-box' }} />
             </div>
             <div>
               <label style={{ fontSize:'10px', color:'var(--text-muted)', letterSpacing:'1px', display:'block', marginBottom:'6px' }}>MONTHLY CONTRIBUTION (₹)</label>
-              <input value={newGoal.monthlyAdd} onChange={e => setNewGoal(g => ({...g, monthlyAdd:e.target.value}))}
+              <input value={newGoal.monthlyAdd} onChange={e => setNewGoal(g => ({...g, monthlyAdd:e.target.value}))} autoComplete="off"
                 placeholder="e.g. 2000" type="number" style={{ width:'100%', padding:'8px 12px', borderRadius:'8px',
                   background:'var(--bg-card)', border:'1px solid var(--border-color)', color:'var(--text-main)', fontSize:'12px', outline:'none', boxSizing:'border-box' }} />
             </div>
             <div>
               <label style={{ fontSize:'10px', color:'var(--text-muted)', letterSpacing:'1px', display:'block', marginBottom:'6px' }}>DEADLINE</label>
-              <input value={newGoal.deadline} onChange={e => setNewGoal(g => ({...g, deadline:e.target.value}))}
+              <input value={newGoal.deadline} onChange={e => setNewGoal(g => ({...g, deadline:e.target.value}))} autoComplete="off" spellCheck={false}
                 placeholder="e.g. Dec 2026" style={{ width:'100%', padding:'8px 12px', borderRadius:'8px',
                   background:'var(--bg-card)', border:'1px solid var(--border-color)', color:'var(--text-main)', fontSize:'12px', outline:'none', boxSizing:'border-box' }} />
             </div>

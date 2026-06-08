@@ -300,7 +300,7 @@ function reducer(state, action) {
 
 export function AppProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, null, getInitialState);
-  const consciousnessRanRef = useRef(false);
+  const consciousnessScanRef = useRef('');
   const autoInitRef = useRef('');
   const lastDriveUpdateRef = useRef(0);
   const writeTimerRef = useRef(null);
@@ -326,7 +326,7 @@ export function AppProvider({ children }) {
     const userId = getStableUserId(state.user);
     if (!email || !userId || !PROXY_URL || autoInitRef.current === userId) return;
     autoInitRef.current = userId;
-    consciousnessRanRef.current = false;
+    consciousnessScanRef.current = '';
     lastDriveUpdateRef.current = 0;
 
     const autoInit = async () => {
@@ -423,12 +423,15 @@ export function AppProvider({ children }) {
     }, 500);
   }, [state]);
 
-  // Run consciousness scan once after proxy connects
+  // Scan after workspace data is ready and whenever confirmed expenses change.
   useEffect(() => {
     const { proxyUrl, connected } = state.sheetsConfig;
     const email = state.user?.email;
-    if (connected && proxyUrl && email && !consciousnessRanRef.current) {
-      consciousnessRanRef.current = true;
+    const userId = getStableUserId(state.user);
+    const latestExpense = state.tracker[state.tracker.length - 1];
+    const scanKey = `${userId}:${state.tracker.length}:${latestExpense?.id || ''}`;
+    if (state.isSessionReady && connected && proxyUrl && email && consciousnessScanRef.current !== scanKey) {
+      consciousnessScanRef.current = scanKey;
       runConsciousnessScan(proxyUrl, email, state.tracker.slice(-50))
         .then(({ newSections, insights }) => {
           if (newSections.length > 0) {
@@ -444,7 +447,7 @@ export function AppProvider({ children }) {
           });
         }).catch(() => {});
     }
-  }, [state.sheetsConfig?.connected, state.sheetsConfig?.proxyUrl, state.user?.email]);
+  }, [state.isSessionReady, state.sheetsConfig?.connected, state.sheetsConfig?.proxyUrl, state.user, state.tracker]);
 
   // (health score effect moved to after `computed` is defined below)
 

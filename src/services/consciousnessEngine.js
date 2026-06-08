@@ -68,6 +68,21 @@ const SECTION_DEFINITIONS = {
   },
 };
 
+export function findTriggeredSectionIds(recentData, existingSectionIds = []) {
+  const recentText = (recentData || [])
+    .map(d => `${d.description || ''} ${d.note || ''} ${d.category || ''}`)
+    .join(' ')
+    .toLowerCase();
+
+  return Object.entries(SECTION_TRIGGERS)
+    .filter(([sectionId, trigger]) => (
+      SECTION_DEFINITIONS[sectionId]
+      && !existingSectionIds.includes(sectionId)
+      && trigger.keywords.some(keyword => recentText.includes(keyword))
+    ))
+    .map(([sectionId]) => sectionId);
+}
+
 // ─── BLUEPRINT WRAPPERS ───────────────────────────────────────────────────────
 // These are now thin wrappers over proxyService so the rest of the app
 // can keep calling the same function names without any changes.
@@ -120,15 +135,9 @@ export async function runConsciousnessScan(proxyUrl, email, recentData) {
   const { createDynamicSheet } = await import('./proxyService');
 
   // Analyze recent expenses for patterns
-  const recentText = recentData.map(d => `${d.description} ${d.note || ''} ${d.category}`).join(' ').toLowerCase();
-
-  for (const [sectionId, trigger] of Object.entries(SECTION_TRIGGERS)) {
-    if (existingSectionIds.includes(sectionId)) continue;
-
-    const matchCount = trigger.keywords.filter(kw => recentText.includes(kw)).length;
-    if (matchCount >= 1) {
+  for (const sectionId of findTriggeredSectionIds(recentData, existingSectionIds)) {
+      const trigger = SECTION_TRIGGERS[sectionId];
       const def = SECTION_DEFINITIONS[sectionId];
-      if (!def) continue;
 
       // Register in blueprint via proxy
       await writeToBlueprint(proxyUrl, email, {
@@ -151,7 +160,6 @@ export async function runConsciousnessScan(proxyUrl, email, recentData) {
         sheetRef: def.sheetRef,
         message: `I noticed you've been tracking ${sectionId === 'vehicle' ? 'fuel & mileage' : sectionId} data. I built you a ${trigger.name} — check the sidebar! 👀`,
       });
-    }
   }
 
   // Generate insights from spending patterns

@@ -41,6 +41,13 @@ test('uses transaction context instead of an overly specific AI category', () =>
   })).toBe('Transport');
 });
 
+test('infers Transport from general vehicle context', () => {
+  expect(inferCanonicalCategory({
+    description: 'Bike service',
+    category: 'Vehicle',
+  })).toBe('Transport');
+});
+
 test('preserves a reusable unknown category as a new proposal', () => {
   const result = parseExpensesForNewCategories([
     { description: 'Dog food', amount: 500, category: 'NEW:Pet Care' },

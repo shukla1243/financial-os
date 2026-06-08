@@ -6,6 +6,27 @@ import { THEME_PRESETS, generateThemeFromVibe } from '../services/themeEngine';
 import LogoutButton from '../components/LogoutButton';
 import { clearUserState, getStableUserId, readUserState } from '../services/userStorage';
 
+function Section({ title, jp, children }) {
+  return (
+    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 'var(--card-radius, 12px)', padding: '20px', marginBottom: '16px' }}>
+      <div style={{ marginBottom: '16px', borderBottom: '1px solid var(--border-color)', paddingBottom: '12px' }}>
+        <div style={{ fontFamily: 'Orbitron, monospace', fontSize: '13px', fontWeight: 700, color: 'var(--primary-color)', letterSpacing: '1px' }}>{title}</div>
+        <div style={{ fontFamily: 'monospace', fontSize: '10px', color: 'var(--primary-color)80', letterSpacing: '2px', marginTop: '2px' }}>{jp}</div>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function SaveButton({ onClick, id, label = 'Save', saved, submittingSection }) {
+  return (
+    <button onClick={onClick} disabled={submittingSection === id} style={{ background: saved === id ? '#10b981' : 'linear-gradient(135deg,#7c3aed,#06b6d4)', color: 'white', border: 'none', borderRadius: '8px', padding: '8px 16px', fontSize: '13px', cursor: submittingSection === id ? 'not-allowed' : 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px', transition: 'all 0.2s ease', opacity: submittingSection === id ? 0.6 : 1 }}>
+      {submittingSection === id ? <div className="spinner spinner-sm" /> : saved === id ? <Check size={14} /> : <Save size={14} />}
+      {submittingSection === id ? 'Saving...' : saved === id ? 'Saved!' : label}
+    </button>
+  );
+}
+
 export default function Settings() {
   const { state, syncFromSheets, updateTheme, saveSettings, addNewCategory } = useApp();
   const [vibePrompt, setVibePrompt] = useState('');
@@ -85,29 +106,12 @@ export default function Settings() {
     updateTheme(updated);
   };
 
-  const Section = ({ title, jp, children }) => (
-    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 'var(--card-radius, 12px)', padding: '20px', marginBottom: '16px' }}>
-      <div style={{ marginBottom: '16px', borderBottom: '1px solid var(--border-color)', paddingBottom: '12px' }}>
-        <div style={{ fontFamily: 'Orbitron, monospace', fontSize: '13px', fontWeight: 700, color: 'var(--primary-color)', letterSpacing: '1px' }}>{title}</div>
-        <div style={{ fontFamily: 'monospace', fontSize: '10px', color: 'var(--primary-color)80', letterSpacing: '2px', marginTop: '2px' }}>{jp}</div>
-      </div>
-      {children}
-    </div>
-  );
-
-  const SaveButton = ({ onClick, id, label = 'Save' }) => (
-    <button onClick={onClick} disabled={submittingSection === id} style={{ background: saved === id ? '#10b981' : 'linear-gradient(135deg,#7c3aed,#06b6d4)', color: 'white', border: 'none', borderRadius: '8px', padding: '8px 16px', fontSize: '13px', cursor: submittingSection === id ? 'not-allowed' : 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px', transition: 'all 0.2s ease', opacity: submittingSection === id ? 0.6 : 1 }}>
-      {submittingSection === id ? <div className="spinner spinner-sm" /> : saved === id ? <Check size={14} /> : <Save size={14} />}
-      {submittingSection === id ? 'Saving...' : saved === id ? 'Saved!' : label}
-    </button>
-  );
-
   const score = state.financialHealthScore;
   const scoreValue = score ?? 0;
   const scoreColor = score === null ? '#64748b' : score >= 80 ? '#10b981' : score >= 60 ? '#f59e0b' : '#ef4444';
 
   return (
-    <div style={{ animation: 'slideUp 0.35s ease-out', maxWidth: '700px', width: '100%' }}>
+    <div style={{ maxWidth: '700px', width: '100%' }}>
       <div style={{ marginBottom: '24px' }}>
         <h2 style={{ fontFamily: 'Orbitron, monospace', fontSize: '22px', fontWeight: 700, background: 'linear-gradient(135deg,#a78bfa,#06b6d4)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>SETTINGS</h2>
         <div style={{ fontFamily: 'monospace', fontSize: '11px', color: '#7c3aed80', letterSpacing: '2px' }}>設定パネル — Configure your Financial OS</div>
@@ -247,7 +251,7 @@ export default function Settings() {
           <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
             Total Base: <span style={{ fontFamily: 'Orbitron, monospace', color: '#06b6d4' }}>₹{(parseFloat(salary || 0) + parseFloat(homeIncome || 0)).toLocaleString()}</span>
           </div>
-          <SaveButton onClick={saveIncome} id="income" />
+          <SaveButton onClick={saveIncome} id="income" saved={saved} submittingSection={submittingSection} />
         </div>
       </Section>
 
@@ -292,7 +296,7 @@ export default function Settings() {
           <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
             Total: <span style={{ fontFamily: 'Orbitron, monospace', color: '#a78bfa' }}>₹{Object.values(budgets).reduce((a, b) => a + (b || 0), 0).toLocaleString()}</span>
           </div>
-          <SaveButton onClick={saveBudgets} id="budgets" />
+          <SaveButton onClick={saveBudgets} id="budgets" saved={saved} submittingSection={submittingSection} />
         </div>
       </Section>
 
