@@ -204,7 +204,14 @@ export function getStoredTheme(userId) {
   const key = getThemeKey(userId);
   if (!key) return THEME_PRESETS.cyberpunk;
   try {
-    const val = localStorage.getItem(key);
+    let val = localStorage.getItem(key);
+    if (!val) {
+      val = localStorage.getItem(`financial_os_theme_${userId}`);
+      if (val) {
+        localStorage.setItem(key, val);
+        localStorage.removeItem(`financial_os_theme_${userId}`);
+      }
+    }
     return val ? JSON.parse(val) : THEME_PRESETS.cyberpunk;
   } catch (e) {
     return THEME_PRESETS.cyberpunk;

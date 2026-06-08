@@ -5,12 +5,12 @@
 
 const CLIENT_ID = process.env.REACT_APP_GOOGLE_CLIENT_ID;
 const SCOPES = 'email profile';
-const TOKEN_KEY = 'financial_os_oauth_session';
+const TOKEN_KEY = 'financialos:auth:token';
 
 let tokenClient = null;
 let currentToken = (() => {
   try {
-    const saved = sessionStorage.getItem(TOKEN_KEY);
+    const saved = localStorage.getItem(TOKEN_KEY);
     if (saved) {
       const parsed = JSON.parse(saved);
       if (parsed.expires_at > Date.now()) {
@@ -21,6 +21,16 @@ let currentToken = (() => {
   return null;
 })();
 let currentUser = null; // { email, name, picture }
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = 30000) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
 
 export function loadGoogleAuth() {
   return new Promise((resolve, reject) => {
@@ -60,7 +70,7 @@ export function getAccessToken(forcePrompt = false) {
         access_token: response.access_token,
         expires_at: Date.now() + (response.expires_in * 1000) - 60000,
       };
-      sessionStorage.setItem(TOKEN_KEY, JSON.stringify(currentToken));
+      localStorage.setItem(TOKEN_KEY, JSON.stringify(currentToken));
       resolve(response.access_token);
     };
     if (forcePrompt) {
@@ -76,7 +86,7 @@ export async function getUserInfo() {
   if (currentUser) return currentUser;
   try {
     const token = await getAccessToken();
-    const res = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+    const res = await fetchWithTimeout('https://www.googleapis.com/oauth2/v2/userinfo', {
       headers: { 'Authorization': `Bearer ${token}` }
     });
     const data = await res.json();
@@ -96,10 +106,15 @@ export function revokeToken() {
   }
   currentToken = null;
   currentUser = null;
-  sessionStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(TOKEN_KEY);
 }
 
 
 export function isAuthenticated() {
   return !!(currentToken && currentToken.expires_at > Date.now());
+}
+
+export async function restoreAuthenticatedUser() {
+  if (!isAuthenticated()) return null;
+  return getUserInfo();
 }

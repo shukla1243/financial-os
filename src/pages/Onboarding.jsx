@@ -3,6 +3,9 @@ import { useApp } from '../context/AppContext';
 import { Send, Zap, Loader } from 'lucide-react';
 import { callAI } from '../services/aiService';
 import { generateThemeFromVibe, personalizeTheme, THEME_PRESETS } from '../services/themeEngine';
+import { clearOnboardingDraft, readOnboardingDraft, writeOnboardingDraft } from '../services/userStorage';
+
+const AI_UNAVAILABLE = "I'm having trouble reaching AI services right now";
 
 const ONBOARDING_PROMPT = `You are onboarding a user to their personal Financial OS app. Have a warm, natural anime-themed conversation to learn about them.
 
@@ -24,15 +27,19 @@ CRITICAL: Speak directly to the user as a warm, human-like anime companion. Do N
 
 export default function Onboarding() {
   const { state, dispatch, completeOnboarding } = useApp();
-  const [messages, setMessages] = useState([]);
+  const initialDraft = readOnboardingDraft(state.user) || {};
+  const [messages, setMessages] = useState(initialDraft.messages || []);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(true);
   const [geminiKey, setGeminiKey] = useState(state.geminiKey || '');
   const [keyEntered, setKeyEntered] = useState(true);
   const bottomRef = useRef(null);
-  const conversationRef = useRef([]);
+  const conversationRef = useRef(initialDraft.conversation || []);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
+  useEffect(() => {
+    writeOnboardingDraft(state.user, { messages, conversation: conversationRef.current });
+  }, [messages, state.user]);
 
   // AI is provided by the authenticated backend gateway; no browser API key is required.
   useEffect(() => {
@@ -53,14 +60,18 @@ export default function Onboarding() {
   }, []);
 
   const callGemini = async (key, history) => {
-    const data = await callAI({
-      systemInstruction: ONBOARDING_PROMPT,
-      contents: history,
-      temperature: 0.8,
-      maxTokens: 400,
-      key,
-    });
-    return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const data = await callAI({
+        systemInstruction: ONBOARDING_PROMPT,
+        contents: history,
+        temperature: 0.8,
+        maxTokens: 400,
+        key,
+      });
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      if (text && !text.includes(AI_UNAVAILABLE)) return text;
+    }
+    throw new Error('AI is temporarily unavailable. Your onboarding progress has been saved.');
   };
 
   const startChat = async () => {
@@ -145,10 +156,11 @@ export default function Onboarding() {
 
         profile.theme = personalizeTheme(
           generatedTheme,
-          `${state.user?.sub || state.user?.userId || ''}:${profile.personality || ''}:${profile.profession || ''}`
+          `${state.user?.sub || ''}:${profile.personality || ''}:${profile.profession || ''}`
         );
 
         await completeOnboarding(profile);
+        clearOnboardingDraft(state.user);
       } else {
         setMessages(prev => [...prev, { role: 'ai', text: aiText }]);
       }
@@ -174,7 +186,7 @@ export default function Onboarding() {
       goals: [],
       personality: '',
       welcomeNote: 'Welcome to Financial OS! 🚀',
-      theme: personalizeTheme(THEME_PRESETS.cyberpunk, state.user?.sub || state.user?.userId || state.user?.email)
+      theme: personalizeTheme(THEME_PRESETS.cyberpunk, state.user?.sub || '')
     });
   } catch (error) {
     alert(error.message);

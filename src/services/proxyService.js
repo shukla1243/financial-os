@@ -14,6 +14,19 @@
 
 import { getAccessToken, getCurrentUser } from './googleAuth';
 
+async function fetchWithTimeout(url, options = {}, timeoutMs = 30000) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (error) {
+    if (error.name === 'AbortError') throw new Error('Request timed out. Please try again.');
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 async function proxyPost(proxyUrl, action, email, data = null) {
   if (!proxyUrl) throw new Error('Apps Script URL not configured.');
   
@@ -28,7 +41,7 @@ async function proxyPost(proxyUrl, action, email, data = null) {
   const body = { action, email, userId: getCurrentUser()?.sub || '', token };
   if (data !== null) body.data = data;
 
-  const res = await fetch(proxyUrl, {
+  const res = await fetchWithTimeout(proxyUrl, {
     method: 'POST',
     // text/plain avoids CORS preflight OPTIONS request
     // redirect:'follow' is essential — Apps Script returns a 302 before the real response
@@ -38,7 +51,9 @@ async function proxyPost(proxyUrl, action, email, data = null) {
   });
 
   if (!res.ok) throw new Error(`Proxy error: ${res.status}`);
-  return res.json();
+  const result = await res.json();
+  if (!result || typeof result !== 'object') throw new Error('Invalid backend response.');
+  return result;
 }
 
 // ─── USER INIT ───────────────────────────────────────────────────────────────
@@ -205,7 +220,7 @@ export async function appendDynamicRow(proxyUrl, email, tabName, rowData) {
  */
 export async function testProxyConnection(proxyUrl) {
   try {
-    const res = await fetch(proxyUrl, { method: 'GET' });
+    const res = await fetchWithTimeout(proxyUrl, { method: 'GET' });
     if (!res.ok) return { success: false, error: `HTTP ${res.status}` };
     const data = await res.json();
     return { success: data.success === true, status: data.status };

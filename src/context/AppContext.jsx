@@ -19,6 +19,7 @@ import { runConsciousnessScan, readBlueprint } from '../services/consciousnessEn
 import { resolveAllInvestments } from '../services/walletService';
 import { clearLegacyStorage, getStableUserId, readUserState, writeUserState } from '../services/userStorage';
 import { calculateFinancialHealth } from '../services/financialHealth';
+import { restoreAuthenticatedUser } from '../services/googleAuth';
 
 const AppContext = createContext();
 
@@ -26,7 +27,9 @@ export const createDefaultState = () => ({
     // Auth
     user: null, // { email, name, picture }
     isLoggedIn: false,
+    isAuthReady: false,
     isSessionReady: false,
+    initializationError: '',
 
     // Onboarding
     profile: null,
@@ -98,18 +101,24 @@ function reducer(state, action) {
         ...cached,
         user,
         isLoggedIn: true,
+        isAuthReady: true,
         isAdmin: false,
         sheetsConfig: { proxyUrl: PROXY_URL, connected: false },
       };
     }
     case 'RESET_SESSION':
-      return createDefaultState();
+      return { ...createDefaultState(), isAuthReady: true };
+    case 'SET_AUTH_READY':
+      return { ...state, isAuthReady: true };
+    case 'SET_INITIALIZATION_ERROR':
+      return { ...state, initializationError: action.payload || '' };
     case 'SET_SESSION_READY':
       return { ...state, isSessionReady: action.payload === true };
     case 'SET_ONBOARDED':
       return { 
         ...state, 
         isOnboarded: true, 
+        user: state.user ? { ...state.user, onboardingCompleted: true } : state.user,
         profile: action.payload,
         config: {
           ...state.config,
@@ -218,6 +227,7 @@ function reducer(state, action) {
         },
         profile: action.payload.profile || null,
         isOnboarded: action.payload.isOnboarded === true,
+        user: state.user ? { ...state.user, onboardingCompleted: action.payload.isOnboarded === true } : state.user,
         isAdmin: action.payload.isAdmin === true,
       };
     }
@@ -289,6 +299,20 @@ export function AppProvider({ children }) {
   const autoInitRef = useRef('');
   const lastDriveUpdateRef = useRef(0);
 
+  useEffect(() => {
+    let active = true;
+    restoreAuthenticatedUser()
+      .then(user => {
+        if (!active) return;
+        if (user) dispatch({ type: 'SWITCH_USER', payload: { user, cached: readUserState(user) } });
+        else dispatch({ type: 'SET_AUTH_READY' });
+      })
+      .catch(() => {
+        if (active) dispatch({ type: 'SET_AUTH_READY' });
+      });
+    return () => { active = false; };
+  }, []);
+
   // AUTO-INIT: when user logs in, silently init + sync using hardcoded PROXY_URL
   // No user configuration needed — happens automatically in the background
   useEffect(() => {
@@ -301,6 +325,7 @@ export function AppProvider({ children }) {
 
     const autoInit = async () => {
       try {
+        dispatch({ type: 'SET_INITIALIZATION_ERROR', payload: '' });
         // Init user account (creates default rows if new user, no-op if returning)
         await initUser(PROXY_URL, email, state.user?.name || '');
         
@@ -352,10 +377,12 @@ export function AppProvider({ children }) {
           if (bp.length > 0) dispatch({ type: 'SET_BLUEPRINT', payload: bp });
         } else {
           dispatch({ type: 'SET_SYNC_STATUS', payload: { status: 'error' } });
+          dispatch({ type: 'SET_INITIALIZATION_ERROR', payload: data.error || 'Could not load your workspace.' });
         }
       } catch (e) {
         // Non-fatal — app still works offline from localStorage
         dispatch({ type: 'SET_SYNC_STATUS', payload: { status: 'error' } });
+        dispatch({ type: 'SET_INITIALIZATION_ERROR', payload: e.message || 'Could not load your workspace.' });
       }
     };
 

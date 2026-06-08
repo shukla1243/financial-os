@@ -27,6 +27,7 @@ export default function Login({ onLogin }) {
       setError(e.message?.includes('access_denied')
         ? 'Access denied. Make sure you are added as a test user in Google Console.'
         : e.message || 'Login failed. Try again.');
+    } finally {
       setLoading(false);
     }
   };

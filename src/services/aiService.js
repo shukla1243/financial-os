@@ -6,6 +6,9 @@ import { PROXY_URL } from '../config';
 import { getCurrentUser } from './googleAuth';
 import { proxyAI } from './proxyService';
 
+const inFlightRequests = new Map();
+const AI_FALLBACK = "I'm having trouble reaching AI services right now. Your data remains safe. Please try again shortly.";
+
 export async function callAI({ systemInstruction, contents, temperature = 0.7, maxTokens = 600 }) {
   // Convert Gemini payload format to OpenAI Chat format
   const messages = [];
@@ -31,9 +34,19 @@ export async function callAI({ systemInstruction, contents, temperature = 0.7, m
 
   const user = getCurrentUser();
   if (!PROXY_URL || !user?.email) throw new Error('Authenticated AI gateway is unavailable.');
-  const data = await proxyAI(PROXY_URL, user.email, { messages, temperature, maxTokens });
-  if (!data?.success) throw new Error(data?.error || 'AI request failed.');
-  return { candidates: [{ content: { parts: [{ text: data.content || '' }] } }] };
+  const request = { messages, temperature, maxTokens };
+  const requestKey = `${user.sub}:${JSON.stringify(request)}`;
+  if (inFlightRequests.has(requestKey)) return inFlightRequests.get(requestKey);
+
+  const pending = proxyAI(PROXY_URL, user.email, request)
+    .then(data => {
+      const content = String(data?.content || '').trim();
+      return { candidates: [{ content: { parts: [{ text: content || AI_FALLBACK }] } }] };
+    })
+    .catch(() => ({ candidates: [{ content: { parts: [{ text: AI_FALLBACK }] } }] }))
+    .finally(() => inFlightRequests.delete(requestKey));
+  inFlightRequests.set(requestKey, pending);
+  return pending;
 }
 
 export async function extractProfileFact(userMessage, apiKey) {

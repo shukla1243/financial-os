@@ -232,6 +232,14 @@ function AppShell() {
     window.location.reload();
   };
 
+  if (!state.isAuthReady) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: 'var(--bg-main)', color: 'var(--text-muted)' }}>
+        Restoring your secure session...
+      </div>
+    );
+  }
+
   if (state.isSuspended) {
     return <Suspended />;
   }
@@ -243,12 +251,12 @@ function AppShell() {
   if (!state.isSessionReady) {
     return (
       <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: 'var(--bg-main)', color: 'var(--text-muted)' }}>
-        Verifying your isolated workspace...
+        {state.initializationError || 'Verifying your isolated workspace...'}
       </div>
     );
   }
 
-  if (!state.isOnboarded) {
+  if (state.user?.onboardingCompleted === false) {
     return <Onboarding />;
   }
 

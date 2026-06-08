@@ -16,7 +16,13 @@ const MASTER_SHEET_ID = PropertiesService.getScriptProperties().getProperty('MAS
 const ADMIN_EMAIL = PropertiesService.getScriptProperties().getProperty('ADMIN_EMAIL') || '';
 const GOOGLE_CLIENT_ID = PropertiesService.getScriptProperties().getProperty('GOOGLE_CLIENT_ID') || '';
 const OPENROUTER_API_KEY = PropertiesService.getScriptProperties().getProperty('OPENROUTER_API_KEY') || '';
-const OPENROUTER_MODEL = PropertiesService.getScriptProperties().getProperty('OPENROUTER_MODEL') || 'openrouter/free';
+const OPENROUTER_MODELS = [
+  'google/gemini-2.5-flash-lite',
+  'google/gemini-2.0-flash-exp',
+  'meta-llama/llama-3.1-8b-instruct',
+  'microsoft/phi-3-mini-128k-instruct',
+  'qwen/qwen2-7b-instruct',
+];
 const ALLOWED_ACTIONS = [
   'initUser', 'getUserStatus', 'getAdminRegistry', 'toggleUserStatus',
   'getConfig', 'setConfig', 'setConfigBatch', 'completeOnboarding',
@@ -193,8 +199,10 @@ function getUserSpreadsheetIdUnlocked(userId, email, name) {
   if (lastRow >= 2) {
     const registryData = registrySheet.getRange(1, 1, lastRow, REGISTRY_SCHEMA.length).getValues();
     for (let i = 1; i < registryData.length; i++) {
-      if (registryData[i][1].toString() === userId ||
-          registryData[i][0].toString().toLowerCase() === email.toLowerCase()) {
+      const registryUserId = registryData[i][1].toString();
+      const legacyEmailMatch = !registryUserId &&
+        registryData[i][0].toString().toLowerCase() === email.toLowerCase();
+      if (registryUserId === userId || legacyEmailMatch) {
         userRowIndex = i + 1;
         registryEmail = registryData[i][0].toString();
         spreadsheetId = registryData[i][3].toString();
@@ -565,29 +573,46 @@ function callAI(email, request) {
   const cache = CacheService.getScriptCache();
   const rateKey = 'ai_rate_' + Utilities.base64EncodeWebSafe(email.toLowerCase()).slice(0, 80);
   const requestCount = Number(cache.get(rateKey) || 0);
-  if (requestCount >= 30) return { success: false, error: 'AI rate limit reached. Try again shortly.' };
+  if (requestCount >= 30) {
+    return {
+      success: true,
+      fallback: true,
+      content: "I'm having trouble reaching AI services right now. Your data remains safe. Please try again shortly.",
+    };
+  }
   cache.put(rateKey, String(requestCount + 1), 60);
   const messages = Array.isArray(request.messages) ? request.messages.slice(-80) : [];
   if (messages.length === 0) return { success: false, error: 'AI request has no messages.' };
   if (JSON.stringify(messages).length > 100000) return { success: false, error: 'AI request is too large.' };
-  const payload = {
-    model: OPENROUTER_MODEL,
-    messages: messages,
-    temperature: Math.max(0, Math.min(Number(request.temperature) || 0.7, 1.5)),
-    max_tokens: Math.max(1, Math.min(Number(request.maxTokens) || 600, 1200)),
-  };
-  const response = UrlFetchApp.fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'post',
-    contentType: 'application/json',
-    headers: { Authorization: 'Bearer ' + OPENROUTER_API_KEY, 'X-Title': 'Financial OS' },
-    payload: JSON.stringify(payload),
-    muteHttpExceptions: true,
-  });
-  const data = JSON.parse(response.getContentText() || '{}');
-  if (response.getResponseCode() < 200 || response.getResponseCode() >= 300) {
-    return { success: false, error: data.error?.message || 'AI provider request failed.' };
+  const models = OPENROUTER_MODELS;
+  for (let i = 0; i < models.length; i++) {
+    const payload = {
+      model: models[i],
+      messages: messages,
+      temperature: Math.max(0, Math.min(Number(request.temperature) || 0.7, 1.5)),
+      max_tokens: Math.max(1, Math.min(Number(request.maxTokens) || 600, 1200)),
+    };
+    try {
+      const response = UrlFetchApp.fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'post',
+        contentType: 'application/json',
+        headers: { Authorization: 'Bearer ' + OPENROUTER_API_KEY, 'X-Title': 'Financial OS' },
+        payload: JSON.stringify(payload),
+        muteHttpExceptions: true,
+      });
+      const data = JSON.parse(response.getContentText() || '{}');
+      const content = String(data.choices?.[0]?.message?.content || '').trim();
+      if (response.getResponseCode() >= 200 && response.getResponseCode() < 300 && content) {
+        return { success: true, content, model: models[i] };
+      }
+    } catch (error) {}
+    if (i < models.length - 1) Utilities.sleep(Math.min(4000, 500 * Math.pow(2, i)));
   }
-  return { success: true, content: data.choices?.[0]?.message?.content || '' };
+  return {
+    success: true,
+    fallback: true,
+    content: "I'm having trouble reaching AI services right now. Your data remains safe. Please try again shortly.",
+  };
 }
 
 function getExpenses(ssId, email) {

@@ -9,8 +9,8 @@ import {
 beforeEach(() => localStorage.clear());
 
 test('uses stable Google subject IDs for isolated cache keys', () => {
-  expect(getUserStateKey({ sub: 'user-a', email: 'same@example.com' })).toBe('financial_os_user_user-a');
-  expect(getUserStateKey({ sub: 'user-b', email: 'same@example.com' })).toBe('financial_os_user_user-b');
+  expect(getUserStateKey({ sub: 'user-a', email: 'same@example.com' })).toBe('financialos:user-a:state');
+  expect(getUserStateKey({ sub: 'user-b', email: 'same@example.com' })).toBe('financialos:user-b:state');
 });
 
 test('does not expose one user cache to another user', () => {
