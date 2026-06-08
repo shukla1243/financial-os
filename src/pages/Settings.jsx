@@ -248,6 +248,19 @@ export default function Settings() {
               })}
             </div>
           </div>
+          <div className="theme-director">
+            <div>
+              <strong>AI VISUAL DIRECTOR</strong>
+              <span>Describe a world. The AI safely composes colors, surfaces, panel geometry, motion, density, navigation, atmosphere, and hero behavior.</span>
+            </div>
+            <div>
+              <input value={vibePrompt} onChange={e => setVibePrompt(e.target.value)} placeholder="e.g. quiet moonlit observatory with calm motion" />
+              <button type="button" onClick={handleGenerateAITheme} disabled={generatingTheme || !vibePrompt.trim()}>
+                {generatingTheme ? <div className="spinner spinner-sm" /> : <Zap size={14} />}
+                {generatingTheme ? 'Directing...' : 'Generate full UI'}
+              </button>
+            </div>
+          </div>
         </div>
       </Section>
 

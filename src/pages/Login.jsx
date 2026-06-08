@@ -1,13 +1,12 @@
 import React, { useState } from 'react';
-import { Zap } from 'lucide-react';
+import { ArrowDown, ArrowRight, Bot, BrainCircuit, Database, Layers3, ShieldCheck, Sparkles, Target, Zap } from 'lucide-react';
 import { getAccessToken, getUserInfo } from '../services/googleAuth';
 
-const FEATURES = [
-  { icon: '🧠', text: 'AI that learns you over time' },
-  { icon: '📊', text: 'Live dashboard across all devices' },
-  { icon: '🌱', text: 'App builds new sections automatically' },
-  { icon: '💹', text: 'Investments, goals & bill tracking' },
-  { icon: '🔒', text: 'Your data, privacy-first centralized backend' },
+const SYSTEMS = [
+  { id: '01', title: 'Living dashboard', copy: 'A command center that turns income, spending, goals, and health into one readable system.', icon: Layers3 },
+  { id: '02', title: 'Conscious companion', copy: 'An AI layer that remembers only your isolated context and helps the OS evolve around you.', icon: BrainCircuit },
+  { id: '03', title: 'Self-building modules', copy: 'Log real life and Financial OS can create focused systems for vehicles, travel, habits, and more.', icon: Bot },
+  { id: '04', title: 'Your data realm', copy: 'Every account receives its own workspace, settings, memory, categories, and financial history.', icon: Database },
 ];
 
 export default function Login({ onLogin }) {
@@ -21,7 +20,6 @@ export default function Login({ onLogin }) {
       await getAccessToken(true);
       const user = await getUserInfo();
       if (!user) throw new Error('Could not get user info');
-
       onLogin(user);
     } catch (e) {
       setError(e.message?.includes('access_denied')
@@ -33,94 +31,59 @@ export default function Login({ onLogin }) {
   };
 
   return (
-    <div className="login-launcher" style={{ minHeight: '100vh', background: 'var(--bg-main)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px', position: 'relative', overflow: 'hidden' }}>
-      
-      {/* Background effects */}
-      <div style={{ position: 'absolute', top: '-20%', left: '-10%', width: '600px', height: '600px', borderRadius: '50%', background: 'radial-gradient(circle, #7c3aed08 0%, transparent 70%)', pointerEvents: 'none', animation: 'float 6s ease-in-out infinite' }} />
-      <div style={{ position: 'absolute', bottom: '-20%', right: '-10%', width: '500px', height: '500px', borderRadius: '50%', background: 'radial-gradient(circle, #06b6d408 0%, transparent 70%)', pointerEvents: 'none', animation: 'float 8s ease-in-out infinite reverse' }} />
+    <div className="os-landing">
+      <nav className="landing-nav">
+        <div className="landing-brand"><span><Zap size={16} /></span><strong>FINANCIAL OS</strong><small>YOUR LIVING MONEY SYSTEM</small></div>
+        <div className="landing-nav__links"><a href="#systems">Systems</a><a href="#evolution">Evolution</a><a href="#privacy">Isolation</a></div>
+        <button className="landing-login-button" onClick={handleGoogleLogin} disabled={loading}>{loading ? 'Opening system...' : 'Enter your OS'}<ArrowRight size={14} /></button>
+      </nav>
 
-      <div className="login-launcher__content" style={{ width: '100%', maxWidth: '420px', position: 'relative' }}>
-        
-        {/* Logo */}
-        <div style={{ textAlign: 'center', marginBottom: '40px' }}>
-          <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '72px', height: '72px', borderRadius: '20px', background: 'linear-gradient(135deg, #7c3aed, #06b6d4)', marginBottom: '16px', boxShadow: '0 0 40px #7c3aed40', animation: 'bounceIn 0.6s ease-out' }}>
-            <Zap size={36} color="white" />
-          </div>
-          <h1 style={{ fontFamily: 'Orbitron, monospace', fontSize: '28px', fontWeight: 900, background: 'linear-gradient(90deg, #a78bfa, #06b6d4, #f472b6, #a78bfa)', backgroundSize: '200% auto', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', animation: 'shimmer 3s linear infinite', marginBottom: '6px' }}>
-            FINANCIAL OS
-          </h1>
-          <div style={{ fontFamily: 'monospace', fontSize: '11px', color: '#475569', letterSpacing: '2px' }}>
-            金融システム — Your Living Finance AI
-          </div>
-        </div>
-
-        {/* Main card */}
-        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '20px', padding: '32px', marginBottom: '20px' }}>
-          <h2 style={{ fontFamily: 'Orbitron, monospace', fontSize: '14px', color: '#a78bfa', letterSpacing: '1px', marginBottom: '8px' }}>WELCOME BACK</h2>
-          <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: '1.6', marginBottom: '24px' }}>
-            Sign in with Google to access your personal Financial OS. Your data syncs instantly across all devices.
-          </p>
-
-          {/* Google Sign In Button */}
-          <button
-            onClick={handleGoogleLogin}
-            disabled={loading}
-            style={{
-              width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid var(--border-color)',
-              background: loading ? 'var(--bg-main)' : '#fff', color: loading ? '#475569' : 'var(--bg-main)',
-              fontSize: '14px', fontWeight: 600, cursor: loading ? 'not-allowed' : 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px',
-              transition: 'all 0.2s', marginBottom: '12px',
-            }}
-            onMouseEnter={e => { if (!loading) e.currentTarget.style.transform = 'translateY(-1px)'; }}
-            onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; }}
-          >
-            {loading ? (
-              <>
-                <div style={{ width: 20, height: 20, border: '2px solid #475569', borderTopColor: '#7c3aed', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-                Connecting...
-              </>
-            ) : (
-              <>
-                <svg width="20" height="20" viewBox="0 0 24 24">
-                  <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-                  <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-                  <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
-                  <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-                </svg>
-                Continue with Google
-              </>
-            )}
-          </button>
-
-          {error && (
-            <div style={{ padding: '10px 14px', borderRadius: '8px', background: '#ef444415', border: '1px solid #ef444430', fontSize: '12px', color: '#ef4444', marginBottom: '12px' }}>
-              {error}
+      <main>
+        <section className="landing-hero">
+          <div className="landing-orbit landing-orbit--one" /><div className="landing-orbit landing-orbit--two" />
+          <div className="landing-hero__rail landing-hero__rail--left"><span>INTELLIGENCE</span><span>ISOLATION</span><span>EVOLUTION</span></div>
+          <div className="landing-hero__rail landing-hero__rail--right"><span>01</span><span>FINANCIAL CORE</span></div>
+          <div className="landing-hero__copy">
+            <div className="landing-kicker"><Sparkles size={13} /> A PERSONAL OPERATING SYSTEM FOR MONEY</div>
+            <h1><span>YOUR MONEY.</span><strong>NOW ALIVE.</strong></h1>
+            <p>Financial OS is not another tracker. It is a private, evolving command system that learns how your life moves and builds the tools you need next.</p>
+            <div className="landing-hero__actions">
+              <button className="landing-primary" onClick={handleGoogleLogin} disabled={loading}>{loading ? 'Connecting securely...' : 'Initialize your OS'}<ArrowRight size={16} /></button>
+              <button className="landing-secondary" onClick={() => document.getElementById('systems')?.scrollIntoView({ behavior: 'smooth' })}>See the system<ArrowDown size={15} /></button>
             </div>
-          )}
-
-          <div style={{ fontSize: '11px', color: '#475569', textAlign: 'center', lineHeight: '1.5' }}>
-            🔒 We only access your Google Sheets — nothing else. Your financial data never leaves your account.
+            {error && <div className="landing-error">{error}</div>}
           </div>
-        </div>
+          <div className="landing-core" aria-hidden="true">
+            <div className="landing-core__ring landing-core__ring--outer"><span /><span /><span /></div>
+            <div className="landing-core__ring landing-core__ring--inner" />
+            <div className="landing-core__center"><Zap size={42} /><strong>F/OS</strong><span>CORE ONLINE</span></div>
+            <div className="landing-core__satellite landing-core__satellite--one"><Target size={15} /><span>GOALS</span></div>
+            <div className="landing-core__satellite landing-core__satellite--two"><BrainCircuit size={15} /><span>MEMORY</span></div>
+            <div className="landing-core__satellite landing-core__satellite--three"><ShieldCheck size={15} /><span>PRIVATE</span></div>
+          </div>
+          <div className="landing-ticker"><div>TRACK REAL LIFE · BUILD YOUR BUFFER · EVOLVE YOUR SYSTEM · OWN YOUR DATA · TRACK REAL LIFE · BUILD YOUR BUFFER · EVOLVE YOUR SYSTEM · OWN YOUR DATA ·</div></div>
+        </section>
 
-        {/* Features */}
-        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '16px', padding: '20px' }}>
-          <div style={{ fontSize: '10px', color: '#475569', letterSpacing: '1.5px', marginBottom: '14px' }}>WHAT YOU GET</div>
-          {FEATURES.map((f, i) => (
-            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px', animation: 'slideInLeft 0.4s ease-out both', animationDelay: `${i * 0.1}s` }}>
-              <span style={{ fontSize: '16px' }}>{f.icon}</span>
-              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{f.text}</span>
-            </div>
-          ))}
-        </div>
+        <section className="landing-systems" id="systems">
+          <header><div><span>EVERYTHING CONNECTED</span><h2>One OS. Every financial chapter.</h2></div><p>Your dashboard, AI memory, categories, goals, reports, and newly generated modules operate as one isolated system.</p></header>
+          <div className="landing-system-grid">
+            {SYSTEMS.map(({ id, title, copy, icon: Icon }) => <article key={id}><div><em>{id}</em><Icon size={22} /></div><h3>{title}</h3><p>{copy}</p><span>System module <ArrowRight size={12} /></span></article>)}
+          </div>
+        </section>
 
-        <div style={{ textAlign: 'center', marginTop: '20px', fontSize: '11px', color: '#334155' }}>
-          Built with ❤️ · Your personal AI-powered Financial OS
-        </div>
-      </div>
+        <section className="landing-evolution" id="evolution">
+          <div className="landing-evolution__copy"><span>THE OS EVOLVES WITH YOU</span><h2>Log life.<br />Unlock systems.</h2><p>Tell the AI about fuel, a trip, a goal, or a new routine. Financial OS connects the transaction to its financial context and can create a dedicated module when the pattern deserves one.</p><button className="landing-primary" onClick={handleGoogleLogin}>Start your first chapter<ArrowRight size={16} /></button></div>
+          <div className="landing-evolution__stack">
+            <article><em>INPUT</em><strong>Fuel · 6 June · 9,890 km</strong><span>Natural language activity detected</span></article>
+            <article><em>INTELLIGENCE</em><strong>Transport category + Vehicle OS</strong><span>Context classified and specialized</span></article>
+            <article><em>OUTPUT</em><strong>Tracker updated. Module evolved.</strong><span>One action, connected everywhere</span></article>
+          </div>
+        </section>
 
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        <section className="landing-privacy" id="privacy">
+          <ShieldCheck size={30} /><span>YOUR PRIVATE REALM</span><h2>No shared memory.<br />No borrowed identity.</h2><p>Each user receives an isolated workspace. Your financial system is built from your own activity, goals, settings, and choices.</p><button className="landing-login-button" onClick={handleGoogleLogin}>Enter Financial OS<ArrowRight size={14} /></button>
+        </section>
+      </main>
     </div>
   );
 }

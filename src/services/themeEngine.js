@@ -9,6 +9,7 @@ import { extractJsonObject } from './aiJson';
 export const THEME_PRESETS = {
   shadowMonarch: {
     themeName: 'Shadow Monarch', layout: 'left-sidebar', cursor: 'terminal', decorations: 'shadow-particles',
+    surfaceStyle: 'hologram', panelShape: 'cut-corner', motionStyle: 'cinematic', contentDensity: 'spacious', heroStyle: 'orbital', navStyle: 'rail', glowStrength: 'high',
     borderStyle: 'solid', bgMain: '#05030c', bgCard: 'rgba(18, 10, 37, 0.72)', bgSidebar: 'rgba(7, 4, 18, 0.96)',
     borderColor: 'rgba(168, 85, 247, 0.25)', primaryColor: '#a855f7', accentColor: '#7c3aed',
     textMain: '#f5f3ff', textMuted: '#8b82a8', fontFamily: "'Orbitron', 'Inter', sans-serif",
@@ -16,6 +17,7 @@ export const THEME_PRESETS = {
   },
   tokyoNeon: {
     themeName: 'Tokyo Neon', layout: 'left-sidebar', cursor: 'precision', decorations: 'neon-city',
+    surfaceStyle: 'glass', panelShape: 'sharp', motionStyle: 'pulse', contentDensity: 'balanced', heroStyle: 'editorial', navStyle: 'dock', glowStrength: 'high',
     borderStyle: 'solid', bgMain: '#03040b', bgCard: 'rgba(8, 18, 35, 0.72)', bgSidebar: 'rgba(3, 8, 20, 0.96)',
     borderColor: 'rgba(34, 211, 238, 0.24)', primaryColor: '#22d3ee', accentColor: '#f472b6',
     textMain: '#ecfeff', textMuted: '#71869b', fontFamily: "'Orbitron', 'Inter', sans-serif",
@@ -23,6 +25,7 @@ export const THEME_PRESETS = {
   },
   crimsonAkatsuki: {
     themeName: 'Crimson Akatsuki', layout: 'left-sidebar', cursor: 'precision', decorations: 'crimson-clouds',
+    surfaceStyle: 'solid', panelShape: 'cut-corner', motionStyle: 'cinematic', contentDensity: 'compact', heroStyle: 'editorial', navStyle: 'rail', glowStrength: 'high',
     borderStyle: 'solid', bgMain: '#080204', bgCard: 'rgba(35, 7, 12, 0.74)', bgSidebar: 'rgba(18, 3, 7, 0.96)',
     borderColor: 'rgba(239, 68, 68, 0.24)', primaryColor: '#ef4444', accentColor: '#fb7185',
     textMain: '#fff1f2', textMuted: '#a4777d', fontFamily: "'Orbitron', 'Inter', sans-serif",
@@ -30,6 +33,7 @@ export const THEME_PRESETS = {
   },
   oceanDragon: {
     themeName: 'Ocean Dragon', layout: 'left-sidebar', cursor: 'precision', decorations: 'water-ripples',
+    surfaceStyle: 'glass', panelShape: 'soft', motionStyle: 'float', contentDensity: 'spacious', heroStyle: 'orbital', navStyle: 'dock', glowStrength: 'medium',
     borderStyle: 'solid', bgMain: '#020b18', bgCard: 'rgba(5, 29, 53, 0.72)', bgSidebar: 'rgba(2, 15, 31, 0.96)',
     borderColor: 'rgba(34, 211, 238, 0.23)', primaryColor: '#06b6d4', accentColor: '#38bdf8',
     textMain: '#ecfeff', textMuted: '#6c8ca1', fontFamily: "'Orbitron', 'Inter', sans-serif",
@@ -37,6 +41,7 @@ export const THEME_PRESETS = {
   },
   sakuraDream: {
     themeName: 'Sakura Dream', layout: 'left-sidebar', cursor: 'sakura', decorations: 'falling-sakura',
+    surfaceStyle: 'paper', panelShape: 'soft', motionStyle: 'calm', contentDensity: 'spacious', heroStyle: 'minimal', navStyle: 'dock', glowStrength: 'low',
     borderStyle: 'solid', bgMain: '#160811', bgCard: 'rgba(48, 16, 36, 0.72)', bgSidebar: 'rgba(28, 8, 20, 0.96)',
     borderColor: 'rgba(244, 114, 182, 0.25)', primaryColor: '#f472b6', accentColor: '#fda4af',
     textMain: '#fff1f5', textMuted: '#be91a7', fontFamily: "'Outfit', 'Inter', sans-serif",
@@ -44,6 +49,7 @@ export const THEME_PRESETS = {
   },
   cyberHunter: {
     themeName: 'Cyber Hunter', layout: 'left-sidebar', cursor: 'terminal', decorations: 'hud-grid',
+    surfaceStyle: 'hologram', panelShape: 'sharp', motionStyle: 'pulse', contentDensity: 'compact', heroStyle: 'command', navStyle: 'rail', glowStrength: 'high',
     borderStyle: 'solid', bgMain: '#01070d', bgCard: 'rgba(3, 24, 39, 0.76)', bgSidebar: 'rgba(1, 13, 24, 0.97)',
     borderColor: 'rgba(14, 165, 233, 0.25)', primaryColor: '#0ea5e9', accentColor: '#22d3ee',
     textMain: '#f0f9ff', textMuted: '#68889c', fontFamily: "'Orbitron', 'Inter', sans-serif",
@@ -155,16 +161,39 @@ export function personalizeTheme(theme, seed) {
 }
 
 export function normalizeTheme(theme, fallback = THEME_PRESETS.freelancer) {
-  if (!theme || typeof theme !== 'object') return { ...fallback };
+  if (!theme || typeof theme !== 'object') theme = {};
   const allowedLayouts = ['left-sidebar', 'right-sidebar', 'topbar'];
   const allowedCursors = ['chalk', 'terminal', 'sakura', 'precision', 'normal'];
   const allowedDecorations = ['scanlines', 'blueprint-grid', 'falling-sakura', 'chalkboard-dust', 'shadow-particles', 'neon-city', 'crimson-clouds', 'water-ripples', 'hud-grid', 'none'];
+  const allowedSurfaces = ['glass', 'solid', 'paper', 'hologram'];
+  const allowedShapes = ['rounded', 'sharp', 'cut-corner', 'soft'];
+  const allowedMotion = ['calm', 'float', 'pulse', 'cinematic'];
+  const allowedDensity = ['compact', 'balanced', 'spacious'];
+  const allowedHeroStyles = ['command', 'editorial', 'orbital', 'minimal'];
+  const allowedNavStyles = ['rail', 'dock', 'bar'];
+  const visualFallback = {
+    surfaceStyle: 'glass',
+    panelShape: 'rounded',
+    motionStyle: 'float',
+    contentDensity: 'balanced',
+    heroStyle: 'command',
+    navStyle: fallback.layout === 'topbar' ? 'bar' : 'rail',
+    glowStrength: 'medium',
+  };
   return {
     ...fallback,
+    ...visualFallback,
     ...theme,
     layout: allowedLayouts.includes(theme.layout) ? theme.layout : fallback.layout,
     cursor: allowedCursors.includes(theme.cursor) ? theme.cursor : fallback.cursor,
     decorations: allowedDecorations.includes(theme.decorations) ? theme.decorations : fallback.decorations,
+    surfaceStyle: allowedSurfaces.includes(theme.surfaceStyle) ? theme.surfaceStyle : visualFallback.surfaceStyle,
+    panelShape: allowedShapes.includes(theme.panelShape) ? theme.panelShape : visualFallback.panelShape,
+    motionStyle: allowedMotion.includes(theme.motionStyle) ? theme.motionStyle : visualFallback.motionStyle,
+    contentDensity: allowedDensity.includes(theme.contentDensity) ? theme.contentDensity : visualFallback.contentDensity,
+    heroStyle: allowedHeroStyles.includes(theme.heroStyle) ? theme.heroStyle : visualFallback.heroStyle,
+    navStyle: allowedNavStyles.includes(theme.navStyle) ? theme.navStyle : visualFallback.navStyle,
+    glowStrength: ['low', 'medium', 'high'].includes(theme.glowStrength) ? theme.glowStrength : visualFallback.glowStrength,
   };
 }
 
@@ -172,6 +201,8 @@ export function normalizeTheme(theme, fallback = THEME_PRESETS.freelancer) {
  * Injects a stylesheet into the document head dynamically using theme properties.
  */
 export function applyDynamicTheme(theme) {
+  const normalizedTheme = normalizeTheme(theme);
+  theme = normalizedTheme;
   let styleEl = document.getElementById('dynamic-theme-injected');
   if (!styleEl) {
     styleEl = document.createElement('style');
@@ -180,6 +211,14 @@ export function applyDynamicTheme(theme) {
   }
 
   const borderStyle = theme.borderStyle || 'solid';
+  const root = document.documentElement;
+  root.dataset.surface = theme.surfaceStyle;
+  root.dataset.panelShape = theme.panelShape;
+  root.dataset.motion = theme.motionStyle;
+  root.dataset.density = theme.contentDensity;
+  root.dataset.hero = theme.heroStyle;
+  root.dataset.nav = theme.navStyle;
+  root.dataset.glow = theme.glowStrength;
 
   let cursorCss = '';
   if (theme.cursor === 'chalk') {
@@ -205,6 +244,8 @@ export function applyDynamicTheme(theme) {
       --font-family: ${theme.fontFamily || "'Inter', sans-serif"};
       --card-radius: ${theme.cardRadius || '12px'};
       --shadow-intensity: ${theme.shadowIntensity || 'rgba(124, 58, 237, 0.15)'};
+      --theme-space: ${theme.contentDensity === 'compact' ? '12px' : theme.contentDensity === 'spacious' ? '24px' : '18px'};
+      --theme-glow: ${theme.glowStrength === 'low' ? '0.55' : theme.glowStrength === 'high' ? '1.45' : '1'};
     }
 
     body {
@@ -295,13 +336,21 @@ export async function generateThemeFromVibe(geminiKey, vibeDescription) {
   const prompt = `You are a dynamic UI theme generator. The user wants a theme with the following vibe: "${vibeDescription}".
 Create a harmonious, premium dark-mode or light-mode visual design based on their prompt.
 Verify that the primary and accent colors contrast well with the backgrounds, and text remains highly readable.
+You are selecting from a safe visual grammar. Never return code, CSS, HTML, URLs, scripts, event handlers, or application logic.
 
 Respond ONLY with a JSON object matching this structure (no markdown, no backticks, no comments):
 {
   "themeName": "short name for the generated theme (e.g. Neon Hacker)",
   "layout": "one of: 'left-sidebar', 'right-sidebar', 'topbar'",
   "cursor": "one of: 'chalk', 'terminal', 'sakura', 'precision', 'normal'",
-  "decorations": "one of: 'scanlines', 'blueprint-grid', 'falling-sakura', 'chalkboard-dust', 'none'",
+  "decorations": "one of: 'scanlines', 'blueprint-grid', 'falling-sakura', 'chalkboard-dust', 'shadow-particles', 'neon-city', 'crimson-clouds', 'water-ripples', 'hud-grid', 'none'",
+  "surfaceStyle": "one of: 'glass', 'solid', 'paper', 'hologram'",
+  "panelShape": "one of: 'rounded', 'sharp', 'cut-corner', 'soft'",
+  "motionStyle": "one of: 'calm', 'float', 'pulse', 'cinematic'",
+  "contentDensity": "one of: 'compact', 'balanced', 'spacious'",
+  "heroStyle": "one of: 'command', 'editorial', 'orbital', 'minimal'",
+  "navStyle": "one of: 'rail', 'dock', 'bar'",
+  "glowStrength": "one of: 'low', 'medium', 'high'",
   "borderStyle": "one of: 'solid', 'dashed', 'double'",
   "bgMain": "hex color (main page background)",
   "bgCard": "hex color (card background)",
@@ -320,7 +369,7 @@ Respond ONLY with a JSON object matching this structure (no markdown, no backtic
     const data = await callAI({
       contents: prompt,
       temperature: 0.7,
-      maxTokens: 500,
+      maxTokens: 800,
       key: geminiKey
     });
     const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || '';

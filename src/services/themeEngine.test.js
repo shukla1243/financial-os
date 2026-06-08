@@ -22,3 +22,25 @@ test('keeps built-in anime theme atmosphere options', () => {
   expect(theme.themeName).toBe('Ocean Dragon');
   expect(theme.decorations).toBe('water-ripples');
 });
+
+test('normalizes the generated visual direction grammar', () => {
+  const theme = normalizeTheme({
+    surfaceStyle: 'hologram',
+    panelShape: 'cut-corner',
+    motionStyle: 'cinematic',
+    contentDensity: 'spacious',
+    heroStyle: 'orbital',
+    navStyle: 'dock',
+    glowStrength: 'high',
+  });
+  expect(theme.surfaceStyle).toBe('hologram');
+  expect(theme.panelShape).toBe('cut-corner');
+  expect(theme.motionStyle).toBe('cinematic');
+  expect(theme.navStyle).toBe('dock');
+});
+
+test('rejects executable or unknown visual direction values', () => {
+  const theme = normalizeTheme({ motionStyle: '<script>', navStyle: 'javascript:alert(1)' });
+  expect(theme.motionStyle).toBe('float');
+  expect(theme.navStyle).toBe('bar');
+});
