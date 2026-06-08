@@ -330,7 +330,10 @@ export function AppProvider({ children }) {
     restoreAuthenticatedUser()
       .then(user => {
         if (!active) return;
-        if (user) dispatch({ type: 'SWITCH_USER', payload: { user, cached: readUserState(user), allowInit: false } });
+        if (user) {
+          const enteredApp = sessionStorage.getItem('financial_os_entered') === 'true';
+          dispatch({ type: 'SWITCH_USER', payload: { user, cached: readUserState(user), allowInit: enteredApp } });
+        }
         else dispatch({ type: 'SET_AUTH_READY' });
       })
       .catch(() => {
