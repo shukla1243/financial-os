@@ -17,11 +17,9 @@ const ADMIN_EMAIL = PropertiesService.getScriptProperties().getProperty('ADMIN_E
 const GOOGLE_CLIENT_ID = PropertiesService.getScriptProperties().getProperty('GOOGLE_CLIENT_ID') || '';
 const OPENROUTER_API_KEY = PropertiesService.getScriptProperties().getProperty('OPENROUTER_API_KEY') || '';
 const OPENROUTER_MODELS = [
-  'google/gemini-2.5-flash:free',
-  'meta-llama/llama-3.3-70b-instruct:free',
-  'google/gemini-2.5-pro:free',
-  'qwen/qwen-2.5-7b-instruct:free',
-  'meta-llama/llama-3.1-8b-instruct:free',
+  'google/gemini-3.1-flash-lite',
+  'google/gemini-2.5-flash-lite',
+  'openrouter/free',
 ];
 const ALLOWED_ACTIONS = [
   'initUser', 'getUserStatus', 'getAdminRegistry', 'toggleUserStatus',
@@ -584,39 +582,42 @@ function callAI(email, request) {
   const messages = Array.isArray(request.messages) ? request.messages.slice(-80) : [];
   if (messages.length === 0) return { success: false, error: 'AI request has no messages.' };
   if (JSON.stringify(messages).length > 100000) return { success: false, error: 'AI request is too large.' };
-  const models = OPENROUTER_MODELS;
-  for (let i = 0; i < models.length; i++) {
-    const payload = {
-      model: models[i],
-      messages: messages,
-      temperature: Math.max(0, Math.min(Number(request.temperature) || 0.7, 1.5)),
-      max_tokens: Math.max(1, Math.min(Number(request.maxTokens) || 600, 1200)),
-    };
-    try {
-      const response = UrlFetchApp.fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'post',
-        contentType: 'application/json',
-        headers: { Authorization: 'Bearer ' + OPENROUTER_API_KEY, 'X-Title': 'Financial OS' },
-        payload: JSON.stringify(payload),
-        muteHttpExceptions: true,
-      });
-      const data = JSON.parse(response.getContentText() || '{}');
-      const content = String(data.choices?.[0]?.message?.content || '').trim();
-      const code = response.getResponseCode();
-      if (code >= 200 && code < 300 && content) {
-        return { success: true, content, model: models[i] };
-      } else {
-        console.error("OpenRouter model " + models[i] + " failed with code " + code + ": " + response.getContentText());
-      }
-    } catch (error) {
-      console.error("OpenRouter request failed for " + models[i] + ": " + error.toString());
-    }
-  }
-  return {
-    success: true,
-    fallback: true,
-    content: "I'm having trouble reaching AI services right now. Your data remains safe. Please try again shortly.",
+  const payload = {
+    models: OPENROUTER_MODELS,
+    messages: messages,
+    temperature: Math.max(0, Math.min(Number(request.temperature) || 0.7, 1.5)),
+    max_tokens: Math.max(1, Math.min(Number(request.maxTokens) || 600, 1200)),
   };
+  try {
+    const response = UrlFetchApp.fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'post',
+      contentType: 'application/json',
+      headers: { Authorization: 'Bearer ' + OPENROUTER_API_KEY, 'X-Title': 'Financial OS' },
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true,
+    });
+    const data = JSON.parse(response.getContentText() || '{}');
+    const content = String(data.choices?.[0]?.message?.content || '').trim();
+    const code = response.getResponseCode();
+    if (code >= 200 && code < 300 && content) {
+      return { success: true, content, model: data.model || '' };
+    }
+    console.error('OpenRouter failed with code ' + code + ': ' + response.getContentText());
+    return {
+      success: true,
+      fallback: true,
+      diagnostic: 'openrouter_http_' + code,
+      content: "I'm having trouble reaching AI services right now. Your data remains safe. Please try again shortly.",
+    };
+  } catch (error) {
+    console.error('OpenRouter transport error: ' + error.toString());
+    return {
+      success: true,
+      fallback: true,
+      diagnostic: 'openrouter_transport_error',
+      content: "I'm having trouble reaching AI services right now. Your data remains safe. Please try again shortly.",
+    };
+  }
 }
 
 function getExpenses(ssId, email) {
