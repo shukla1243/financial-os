@@ -7,7 +7,6 @@ import { getCurrentUser } from './googleAuth';
 import { proxyAI } from './proxyService';
 
 const inFlightRequests = new Map();
-const AI_FALLBACK = "I'm having trouble reaching AI services right now. Your data remains safe. Please try again shortly.";
 const AI_TIMEOUT_MS = 25000;
 
 export async function callAI({ systemInstruction, contents, temperature = 0.7, maxTokens = 600 }) {
@@ -47,16 +46,18 @@ export async function callAI({ systemInstruction, contents, temperature = 0.7, m
   ])
     .then(data => {
       const content = String(data?.content || '').trim();
-      return { candidates: [{ content: { parts: [{ text: content || AI_FALLBACK }] } }] };
+      if (!content) throw new Error('AI gateway returned an empty response.');
+      return { candidates: [{ content: { parts: [{ text: content }] } }] };
     })
     .catch((err) => {
       const msg = err?.message || '';
-      const text = msg === 'AI_TIMEOUT'
-        ? 'AI is taking too long to respond. Please try again.'
-        : msg.includes('rate limit') || msg.includes('RATE_LIMIT')
-        ? "You've sent too many requests. Please wait 60 seconds."
-        : AI_FALLBACK;
-      return { candidates: [{ content: { parts: [{ text }] } }] };
+      if (msg === 'AI_TIMEOUT') {
+        throw new Error('AI is taking too long to respond. Please try again.');
+      }
+      if (msg.toLowerCase().includes('rate limit')) {
+        throw new Error("You've sent too many requests. Please wait 60 seconds.");
+      }
+      throw err;
     })
     .finally(() => inFlightRequests.delete(requestKey));
   inFlightRequests.set(requestKey, pending);

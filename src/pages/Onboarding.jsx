@@ -6,6 +6,20 @@ import { generateThemeFromVibe, personalizeTheme, THEME_PRESETS } from '../servi
 import { clearOnboardingDraft, readOnboardingDraft, writeOnboardingDraft } from '../services/userStorage';
 
 const AI_UNAVAILABLE = "I'm having trouble reaching AI services right now";
+const isTransientAIMessage = text => {
+  const value = String(text || '').toLowerCase();
+  return value.includes(AI_UNAVAILABLE.toLowerCase()) ||
+    value.includes('ai onboarding is temporarily unavailable') ||
+    value.includes('something went wrong') ||
+    value.includes('too many requests') ||
+    value.includes('overloaded');
+};
+const cleanDisplayMessages = messages => (messages || []).filter(
+  message => message.role === 'user' || !isTransientAIMessage(message.text)
+);
+const cleanConversation = conversation => (conversation || []).filter(
+  message => !isTransientAIMessage(message.parts?.[0]?.text || message.content || message.text)
+);
 
 const ONBOARDING_PROMPT = `You are onboarding a user to their personal Financial OS app. Have a warm, natural anime-themed conversation to learn about them.
 
@@ -28,17 +42,20 @@ CRITICAL: Speak directly to the user as a warm, human-like anime companion. Do N
 export default function Onboarding() {
   const { state, dispatch, completeOnboarding } = useApp();
   const initialDraft = readOnboardingDraft(state.user) || {};
-  const [messages, setMessages] = useState(initialDraft.messages || []);
+  const [messages, setMessages] = useState(cleanDisplayMessages(initialDraft.messages));
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(!initialDraft.messages || initialDraft.messages.length === 0);
   const [geminiKey, setGeminiKey] = useState(state.geminiKey || '');
   const [keyEntered, setKeyEntered] = useState(true);
   const bottomRef = useRef(null);
-  const conversationRef = useRef(initialDraft.conversation || []);
+  const conversationRef = useRef(cleanConversation(initialDraft.conversation));
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
   useEffect(() => {
-    writeOnboardingDraft(state.user, { messages, conversation: conversationRef.current });
+    writeOnboardingDraft(state.user, {
+      messages: cleanDisplayMessages(messages),
+      conversation: cleanConversation(conversationRef.current),
+    });
   }, [messages, state.user]);
 
   // AI is provided by the authenticated backend gateway; no browser API key is required.
@@ -63,13 +80,13 @@ export default function Onboarding() {
     for (let attempt = 0; attempt < 2; attempt++) {
       const data = await callAI({
         systemInstruction: ONBOARDING_PROMPT,
-        contents: history,
+        contents: cleanConversation(history),
         temperature: 0.8,
         maxTokens: 400,
         key,
       });
       const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-      if (text) return text;
+      if (text && !isTransientAIMessage(text)) return text;
     }
     throw new Error('AI is temporarily unavailable. Your onboarding progress has been saved.');
   };

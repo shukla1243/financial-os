@@ -103,7 +103,11 @@ export async function completeOnboarding(proxyUrl, email, profile) {
 }
 
 export async function proxyAI(proxyUrl, email, request) {
-  return proxyPost(proxyUrl, 'callAI', email, request);
+  const result = await proxyPost(proxyUrl, 'callAI', email, request);
+  if (!result.success) {
+    throw new Error(result.error || 'AI gateway request failed.');
+  }
+  return result;
 }
 
 export async function readCategories(proxyUrl, email) {
