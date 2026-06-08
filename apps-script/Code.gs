@@ -17,8 +17,6 @@ const ADMIN_EMAIL = PropertiesService.getScriptProperties().getProperty('ADMIN_E
 const GOOGLE_CLIENT_ID = PropertiesService.getScriptProperties().getProperty('GOOGLE_CLIENT_ID') || '';
 const OPENROUTER_API_KEY = PropertiesService.getScriptProperties().getProperty('OPENROUTER_API_KEY') || '';
 const OPENROUTER_MODELS = [
-  'google/gemini-3.1-flash-lite',
-  'google/gemini-2.5-flash-lite',
   'openrouter/free',
 ];
 const ALLOWED_ACTIONS = [
