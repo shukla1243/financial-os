@@ -256,8 +256,16 @@ function AppShell() {
     );
   }
 
-  if (!state.isOnboarded) {
+  if (state.onboardingStatus === 'incomplete') {
     return <Onboarding />;
+  }
+
+  if (state.onboardingStatus !== 'complete') {
+    return (
+      <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: 'var(--bg-main)', color: 'var(--text-muted)' }}>
+        Confirming onboarding status from your workspace...
+      </div>
+    );
   }
 
   const layout = theme?.layout || 'left-sidebar';

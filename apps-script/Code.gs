@@ -195,18 +195,27 @@ function getUserSpreadsheetIdUnlocked(userId, email, name) {
 
   if (lastRow >= 2) {
     const registryData = registrySheet.getRange(1, 1, lastRow, REGISTRY_SCHEMA.length).getDisplayValues();
+    const matches = [];
     for (let i = 1; i < registryData.length; i++) {
       const registryUserId = normalizeGoogleSubjectId(registryData[i][1]);
       const registryEmailVal = registryData[i][0].toString().trim().toLowerCase();
       const isMatch = registryUserId === normalizeGoogleSubjectId(userId) ||
                       registryEmailVal === email.toLowerCase();
       if (isMatch) {
-        userRowIndex = i + 1;
-        registryEmail = registryData[i][0].toString();
-        spreadsheetId = registryData[i][3].toString();
-        status = registryData[i][5].toString();
-        break;
+        matches.push({
+          rowIndex: i + 1,
+          email: registryData[i][0].toString(),
+          spreadsheetId: registryData[i][3].toString(),
+          status: registryData[i][5].toString(),
+        });
       }
+    }
+    const selected = selectBestRegistryMatch(matches, email);
+    if (selected) {
+      userRowIndex = selected.rowIndex;
+      registryEmail = selected.email;
+      spreadsheetId = selected.spreadsheetId;
+      status = selected.status;
     }
   }
 
@@ -305,6 +314,21 @@ function ensureRegistrySchema(registrySheet) {
 
 function normalizeGoogleSubjectId(value) {
   return String(value || '').trim().replace(/^'+/, '');
+}
+
+function selectBestRegistryMatch(matches, email) {
+  if (!matches.length) return null;
+  const ranked = matches.map(match => {
+    let score = match.email.toLowerCase() === email.toLowerCase() ? 1 : 0;
+    try {
+      const cfg = getConfig(match.spreadsheetId, match.email).data || {};
+      if (String(cfg.OnboardingComplete).toLowerCase() === 'true') score += 10;
+      if (cfg.ProfileJSON) score += 2;
+    } catch (error) {}
+    return { match, score };
+  });
+  ranked.sort((a, b) => b.score - a.score || a.match.rowIndex - b.match.rowIndex);
+  return ranked[0].match;
 }
 
 function migrateUserEmail(ssId, oldEmail, newEmail) {
@@ -934,7 +958,7 @@ function loadAll(ssId, email) {
         ThemeJSON: cfg.ThemeJSON || '',
       },
       profile: parseJsonOrNull(cfg.ProfileJSON),
-      isOnboarded: cfg.OnboardingComplete === 'true',
+      isOnboarded: String(cfg.OnboardingComplete).toLowerCase() === 'true',
     };
   } catch (err) {
     return { success: false, error: err.toString() };

@@ -9,7 +9,6 @@ import {
   writeMemory,
   loadAllFromProxy,
   addCategory as proxyAddCategory,
-  initUser,
   proxyCheckUpdates,
   getDynamicSheet,
   completeOnboarding as proxyCompleteOnboarding,
@@ -35,6 +34,7 @@ export const createDefaultState = () => ({
     // Onboarding
     profile: null,
     isOnboarded: false,
+    onboardingStatus: 'unknown',
 
     // Config
     config: {
@@ -100,12 +100,11 @@ function reducer(state, action) {
       return {
         ...createDefaultState(),
         ...cached,
-        user: {
-          ...user,
-          onboardingCompleted: cached?.isOnboarded ?? undefined,
-        },
+        user,
         isLoggedIn: true,
         isAuthReady: true,
+        isSessionReady: false,
+        onboardingStatus: 'unknown',
         isAdmin: false,
         sheetsConfig: { proxyUrl: PROXY_URL, connected: false },
       };
@@ -122,6 +121,7 @@ function reducer(state, action) {
       return { 
         ...state, 
         isOnboarded: true, 
+        onboardingStatus: 'complete',
         user: state.user ? { ...state.user, onboardingCompleted: true } : state.user,
         profile: action.payload,
         config: {
@@ -231,6 +231,7 @@ function reducer(state, action) {
         },
         profile: action.payload.profile || null,
         isOnboarded: action.payload.isOnboarded === true,
+        onboardingStatus: action.payload.isOnboarded === true ? 'complete' : 'incomplete',
         user: state.user ? { ...state.user, onboardingCompleted: action.payload.isOnboarded === true } : state.user,
         isAdmin: action.payload.isAdmin === true,
       };
@@ -331,9 +332,6 @@ export function AppProvider({ children }) {
     const autoInit = async () => {
       try {
         dispatch({ type: 'SET_INITIALIZATION_ERROR', payload: '' });
-        // Init user account (creates default rows if new user, no-op if returning)
-        await initUser(PROXY_URL, email, state.user?.name || '');
-        
         // 1. Get user status (Suspended Check)
         let isUserSuspended = false;
         let suspendReasonText = '';
@@ -381,10 +379,12 @@ export function AppProvider({ children }) {
           const bp = await readBlueprint(PROXY_URL, email);
           if (bp.length > 0) dispatch({ type: 'SET_BLUEPRINT', payload: bp });
         } else {
+          autoInitRef.current = '';
           dispatch({ type: 'SET_SYNC_STATUS', payload: { status: 'error' } });
           dispatch({ type: 'SET_INITIALIZATION_ERROR', payload: data.error || 'Could not load your workspace.' });
         }
       } catch (e) {
+        autoInitRef.current = '';
         // Non-fatal — app still works offline from localStorage
         dispatch({ type: 'SET_SYNC_STATUS', payload: { status: 'error' } });
         dispatch({ type: 'SET_INITIALIZATION_ERROR', payload: e.message || 'Could not load your workspace.' });
@@ -392,7 +392,7 @@ export function AppProvider({ children }) {
     };
 
     autoInit();
-  }, [state.user]);
+  }, [state.user?.sub, state.user?.email]);
 
   // Save only to the authenticated user's scoped cache.
   useEffect(() => {
