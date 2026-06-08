@@ -69,14 +69,7 @@ export default function Dashboard() {
   const daysLeft = daysInMonth - today.getDate();
   const dailyBudget = daysLeft > 0 ? Math.round(buffer / daysLeft) : 0;
 
-  const [cryptoPrices, setCryptoPrices] = useState({
-    bitcoin: { inr: 5800000 },
-    ethereum: { inr: 320000 },
-    solana: { inr: 14000 },
-    cardano: { inr: 45 },
-    binancecoin: { inr: 50000 },
-    'matic-network': { inr: 55 }
-  });
+  const [cryptoPrices, setCryptoPrices] = useState({});
 
   useEffect(() => {
     const cryptoItems = (state.investments || []).filter(i => (i.Type || i.type) === 'Crypto');
@@ -131,7 +124,7 @@ export default function Dashboard() {
       {/* Header */}
       <div style={{ marginBottom:'24px' }}>
         <h1 style={{ fontFamily:'Orbitron, monospace', fontSize:'22px', fontWeight:900, background:'linear-gradient(135deg, #a78bfa, #06b6d4, #f472b6)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', marginBottom:'4px' }}>
-          {config.name?.toUpperCase() || 'SHREYANSH'} // FINANCIAL OS
+          {config.name?.toUpperCase() || 'FINANCIAL OS'}
         </h1>
         <div style={{ fontFamily:'monospace', fontSize:'11px', color:'#7c3aed80', letterSpacing:'2px' }}>お金の力で未来を切り拓け — Cut open the future with the power of money</div>
       </div>
@@ -161,7 +154,7 @@ export default function Dashboard() {
       <div style={S.grid2}>
         <KPICard title="TOTAL INCOME" value={`₹${totalIncome.toLocaleString()}`} sub={`Base ₹${(config.salary+config.homeIncome).toLocaleString()}${extraIncome>0?` + ₹${extraIncome.toLocaleString()} extra`:''}`} color="#06b6d4" icon={DollarSign} topColor="#06b6d4" delay={0} />
         <KPICard title="TOTAL EXPENSES" value={`₹${totalExpenses.toLocaleString()}`} sub={tracker.filter(t=>t.month===config.activeMonth && String(t.year)===String(config.activeYear)).length > 0 ? `${tracker.filter(t=>t.month===config.activeMonth && String(t.year)===String(config.activeYear)).length} transactions` : 'No expenses logged yet'} color="#f472b6" icon={TrendingDown} topColor="#f472b6" delay={0.08} />
-        <KPICard title="SAVINGS TARGET" value={`₹${(categorySpend['Savings']||0).toLocaleString()}`} sub={`Target: ₹${(config.budgets['Savings']||6000).toLocaleString()} / month`} color="#10b981" icon={Shield} topColor="#10b981" delay={0.16} />
+        <KPICard title="SAVINGS TARGET" value={`₹${(categorySpend['Savings']||0).toLocaleString()}`} sub={config.budgets['Savings'] ? `Target: ₹${config.budgets['Savings'].toLocaleString()} / month` : 'No savings target configured'} color="#10b981" icon={Shield} topColor="#10b981" delay={0.16} />
         <KPICard title="BUFFER" value={`₹${buffer.toLocaleString()}`} sub={`₹${dailyBudget.toLocaleString()}/day left • ${daysLeft} days remaining`} color="#fbbf24" icon={TrendingUp} topColor="#fbbf24" delay={0.24} />
       </div>
 
@@ -214,10 +207,10 @@ export default function Dashboard() {
           <div style={{ ...S.card, borderTop:'2px solid #10b981', textAlign:'center' }}>
             <div style={S.label}>FINANCIAL HEALTH</div>
             <div style={{ fontFamily:'Orbitron, monospace', fontSize:'36px', fontWeight:900, color: financialHealthScore>=80?'#10b981':financialHealthScore>=60?'#f59e0b':'#ef4444', margin:'8px 0' }}>
-              {displayScore}<span style={{ fontSize:'16px', color:'var(--text-muted)' }}>/100</span>
+              {financialHealthScore === null ? 'N/A' : displayScore}<span style={{ fontSize:'16px', color:'var(--text-muted)' }}>{financialHealthScore === null ? '' : '/100'}</span>
             </div>
             <div style={{ height:'6px', background:'var(--border-color, var(--border-color))', borderRadius:'4px', overflow:'hidden' }}>
-              <div style={{ height:'100%', width:`${financialHealthScore}%`, background:'linear-gradient(90deg, var(--primary-color), #10b981)', borderRadius:'4px' }} />
+              <div style={{ height:'100%', width:`${financialHealthScore || 0}%`, background:'linear-gradient(90deg, var(--primary-color), #10b981)', borderRadius:'4px' }} />
             </div>
           </div>
 

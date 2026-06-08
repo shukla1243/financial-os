@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { PROXY_URL, GEMINI_KEY } from '../config';
+import { PROXY_URL } from '../config';
 import { Save, Check, RefreshCw, Shield, Plus, Database, Zap } from 'lucide-react';
 import { THEME_PRESETS, generateThemeFromVibe } from '../services/themeEngine';
 import LogoutButton from '../components/LogoutButton';
+import { clearUserState, getStableUserId, readUserState } from '../services/userStorage';
 
 export default function Settings() {
-  const { state, dispatch, syncFromSheets, updateTheme } = useApp();
+  const { state, syncFromSheets, updateTheme, saveSettings, addNewCategory } = useApp();
   const [vibePrompt, setVibePrompt] = useState('');
   const [generatingTheme, setGeneratingTheme] = useState(false);
   const [budgets, setBudgets] = useState({ ...state.config.budgets });
@@ -22,35 +23,37 @@ export default function Settings() {
 
   const flash = (id) => { setSaved(id); setTimeout(() => setSaved(''), 2500); };
 
-  const saveIncome = () => {
+  const saveIncome = async () => {
     setSubmittingSection('income');
-    dispatch({ type: 'SET_CONFIG', payload: { salary: parseFloat(salary), homeIncome: parseFloat(homeIncome) } });
-    setTimeout(() => {
-      setSubmittingSection('');
+    try {
+      await saveSettings({ Salary: parseFloat(salary) || 0, HomeIncome: parseFloat(homeIncome) || 0 });
       flash('income');
-    }, 600);
-  };
-
-  const saveBudgets = () => {
-    setSubmittingSection('budgets');
-    dispatch({ type: 'SET_CONFIG', payload: { budgets } });
-    setTimeout(() => {
+    } finally {
       setSubmittingSection('');
-      flash('budgets');
-    }, 600);
+    }
   };
 
-  const addManualCategory = () => {
+  const saveBudgets = async () => {
+    setSubmittingSection('budgets');
+    try {
+      await saveSettings(Object.fromEntries(Object.entries(budgets).map(([cat, amount]) => [`Budget:${cat}`, amount || 0])));
+      flash('budgets');
+    } finally {
+      setSubmittingSection('');
+    }
+  };
+
+  const addManualCategory = async () => {
     if (!newCatName.trim()) return;
     setSubmittingSection('addcat');
-    dispatch({ type: 'ADD_CATEGORY', payload: { name: newCatName.trim(), budget: parseFloat(newCatBudget) || 0 } });
-    setBudgets(prev => ({ ...prev, [newCatName.trim()]: parseFloat(newCatBudget) || 0 }));
+    const categoryName = newCatName.trim();
+    const categoryBudget = parseFloat(newCatBudget) || 0;
+    await addNewCategory(categoryName, categoryBudget);
+    setBudgets(prev => ({ ...prev, [categoryName]: categoryBudget }));
     setNewCatName('');
     setNewCatBudget('');
-    setTimeout(() => {
-      setSubmittingSection('');
-      flash('addcat');
-    }, 600);
+    setSubmittingSection('');
+    flash('addcat');
   };
 
   const handleManualSync = async () => {
@@ -99,8 +102,9 @@ export default function Settings() {
     </button>
   );
 
-  const score = state.financialHealthScore || 0;
-  const scoreColor = score >= 80 ? '#10b981' : score >= 60 ? '#f59e0b' : '#ef4444';
+  const score = state.financialHealthScore;
+  const scoreValue = score ?? 0;
+  const scoreColor = score === null ? '#64748b' : score >= 80 ? '#10b981' : score >= 60 ? '#f59e0b' : '#ef4444';
 
   return (
     <div style={{ animation: 'slideUp 0.35s ease-out', maxWidth: '700px', width: '100%' }}>
@@ -134,10 +138,10 @@ export default function Settings() {
           </div>
 
           {/* Gemini status */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', borderRadius: '8px', padding: '12px', background: GEMINI_KEY ? '#7c3aed10' : '#ef444410', border: `1px solid ${GEMINI_KEY ? '#7c3aed30' : '#ef444430'}` }}>
-            <Zap size={14} color={GEMINI_KEY ? '#a78bfa' : '#ef4444'} />
-            <div style={{ fontSize: '12px', color: GEMINI_KEY ? '#a78bfa' : '#ef4444', fontWeight: 600 }}>
-              {GEMINI_KEY ? 'AI (Gemini) Connected' : 'AI Key Not Configured — contact admin'}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', borderRadius: '8px', padding: '12px', background: state.geminiKey ? '#7c3aed10' : '#ef444410', border: `1px solid ${state.geminiKey ? '#7c3aed30' : '#ef444430'}` }}>
+            <Zap size={14} color={state.geminiKey ? '#a78bfa' : '#ef4444'} />
+            <div style={{ fontSize: '12px', color: state.geminiKey ? '#a78bfa' : '#ef4444', fontWeight: 600 }}>
+              {state.geminiKey ? 'AI connected for this session' : 'AI key not configured for this session'}
             </div>
           </div>
 
@@ -145,7 +149,7 @@ export default function Settings() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', borderRadius: '8px', padding: '12px', background: `${scoreColor}10`, border: `1px solid ${scoreColor}30` }}>
             <Shield size={14} color={scoreColor} />
             <div style={{ fontSize: '12px', color: scoreColor, fontWeight: 600 }}>
-              Financial Health Score: {score}/100
+              Financial Health Score: {score === null ? 'Not enough data' : `${scoreValue}/100`}
             </div>
           </div>
 
@@ -296,17 +300,17 @@ export default function Settings() {
       <Section title="DATA" jp="データ管理 — Backup and reset">
         <div style={{ display: 'flex', gap: '12px' }}>
           <button
-            onClick={() => { if (window.confirm('Clear ALL local data?')) { localStorage.removeItem('financial-os-v4'); window.location.reload(); } }}
+            onClick={() => { if (window.confirm('Clear local cache for this account?')) { clearUserState(state.user); window.location.reload(); } }}
             style={{ background: 'transparent', color: '#ef4444', border: '1px solid #ef444430', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', padding: '8px 16px' }}
           >
             Reset Local Data
           </button>
           <button
             onClick={() => {
-              const data = JSON.stringify(JSON.parse(localStorage.getItem('financial-os-v4') || '{}'), null, 2);
+              const data = JSON.stringify(readUserState(state.user) || {}, null, 2);
               const blob = new Blob([data], { type: 'application/json' });
               const url = URL.createObjectURL(blob);
-              const a = document.createElement('a'); a.href = url; a.download = 'financial-os-backup.json'; a.click();
+              const a = document.createElement('a'); a.href = url; a.download = `financial-os-${getStableUserId(state.user)}-backup.json`; a.click();
             }}
             style={{ background: 'transparent', color: '#a78bfa', border: '1px solid #7c3aed40', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', padding: '8px 16px' }}
           >

@@ -43,7 +43,7 @@ This document provides a complete summary of the architecture, code modification
   * **Registry-Directory Model**: Rewrote backend [Code.gs](file:///d:/test/apps-script/Code.gs) to create user-specific spreadsheet files inside a dedicated folder (`Financial OS User Sheets`) in Google Drive and log details in a secure master registry sheet (`_Registry`).
   * **Server-side Token Verification**: Server validates Google OAuth access tokens via the Google API (`https://oauth2.googleapis.com/tokeninfo`) to verify the caller's email matches the request.
   * **Admin Panel**: Built a dedicated [AdminDashboard.jsx](file:///d:/test/src/pages/AdminDashboard.jsx) using inline React styles. Displays user KPI cards (Total Users, Active, Suspended), a search filter, spreadsheet links, and status toggles (Active vs Suspended).
-  * **Secure Routing**: Wired `/admin` protected route in [App.jsx](file:///d:/test/src/App.jsx) and dynamic Admin Panel menu item in [Sidebar.jsx](file:///d:/test/src/components/Sidebar.jsx), both guarded by `state.isAdmin` (verifying email matches `testaiworkforcollage@gmail.com`).
+  * **Secure Routing**: Wired `/admin` protected route and dynamic Admin Panel menu item, both driven by a server-authorized admin flag.
   * **Session Persistence & Scope Minimization**:
     * Saved the Google OAuth access token to `localStorage` and configured automatic silent token refreshes (`prompt: 'none'`) on page reload to fix page-refresh logout bugs.
     * Reduced requested OAuth scopes in the React client-side to only `email profile`. New users are no longer prompted for invasive Sheets/Drive scopes; they only share their identity, while all database files are provisioned and managed on the admin's centralized server context.
@@ -185,4 +185,3 @@ Before rebuilding/deploying the production version, make sure:
   * Created `extractProfileFact` in [aiService.js](file:///d:/test/src/services/aiService.js) to run Gemini fact extraction in the background.
   * Wired background extraction in [AIChat.jsx](file:///d:/test/src/pages/AIChat.jsx) and [AILogger.jsx](file:///d:/test/src/pages/AILogger.jsx).
   * Injected the compiled `aiMemory` log into [categoryEngine.js](file:///d:/test/src/services/categoryEngine.js) system prompts.
-

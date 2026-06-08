@@ -527,7 +527,7 @@ export default function AILogger() {
       }
 
       if (!foundAction) {
-        setMessages(prev => [...prev, { role: 'ai', text: "Hmm, couldn't quite parse that. Try something like 'paid rent', 'received 15000 salary', or 'add 2000 to Japan Trip'." }]);
+        setMessages(prev => [...prev, { role: 'ai', text: "I couldn't parse that. Try including an action, amount, and category." }]);
       }
     } catch (e) {
       setMessages(prev => [...prev, { role: 'ai', text: 'Something went wrong. Make sure AI is fully configured.' }]);
@@ -877,7 +877,7 @@ export default function AILogger() {
         <div style={{ flex: 1, position: 'relative' }}>
           <textarea
             style={{ background: 'var(--bg-main)', border: '1px solid var(--border-color)', borderRadius: '8px', color: 'var(--text-main)', padding: '10px 14px', fontSize: '14px', outline: 'none', width: '100%', resize: 'none', paddingRight: '48px', lineHeight: '1.5' }}
-            placeholder="Log details: 'spent 200 on petrol', 'got salary 15000', 'add 2000 to Japan Trip', 'paid gym bill'..."
+            placeholder="Describe a transaction, income entry, goal update, or bill payment..."
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={handleKeyDown}

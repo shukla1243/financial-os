@@ -19,6 +19,8 @@ import Investments from './pages/Investments';
 import MonthlyReport from './pages/MonthlyReport';
 import AllExpenses from './pages/AllExpenses';
 import NewSectionToast from './components/NewSectionToast';
+import { revokeToken } from './services/googleAuth';
+import { readUserState } from './services/userStorage';
 
 function Topbar() {
   const { state } = useApp();
@@ -221,13 +223,12 @@ function AppShell() {
   }, [theme]);
 
   const handleLogin = (user) => {
-    dispatch({ type: 'SET_USER', payload: user });
+    dispatch({ type: 'SWITCH_USER', payload: { user, cached: readUserState(user) } });
   };
 
   const handleLogout = () => {
-    dispatch({ type: 'SET_USER', payload: null });
-    dispatch({ type: 'LOAD_STATE', payload: { isOnboarded: false, isLoggedIn: false, user: null } });
-    localStorage.removeItem('financial-os-v4');
+    revokeToken();
+    dispatch({ type: 'RESET_SESSION' });
     window.location.reload();
   };
 
@@ -237,6 +238,14 @@ function AppShell() {
 
   if (!state.isLoggedIn) {
     return <Login onLogin={handleLogin} />;
+  }
+
+  if (!state.isSessionReady) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: 'var(--bg-main)', color: 'var(--text-muted)' }}>
+        Verifying your isolated workspace...
+      </div>
+    );
   }
 
   if (!state.isOnboarded) {

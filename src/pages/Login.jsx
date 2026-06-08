@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Zap } from 'lucide-react';
 import { getAccessToken, getUserInfo } from '../services/googleAuth';
-import { initUser } from '../services/proxyService';
 
 const FEATURES = [
   { icon: '🧠', text: 'AI that learns you over time' },
@@ -22,15 +21,6 @@ export default function Login({ onLogin }) {
       await getAccessToken(true);
       const user = await getUserInfo();
       if (!user) throw new Error('Could not get user info');
-
-      // If proxy URL is already saved, init user account silently (returning user)
-      try {
-        const saved = JSON.parse(localStorage.getItem('financial-os-v4') || '{}');
-        const proxyUrl = saved?.sheetsConfig?.proxyUrl;
-        if (proxyUrl && user.email) {
-          await initUser(proxyUrl, user.email);
-        }
-      } catch (_) { /* non-fatal — user can connect in Settings */ }
 
       onLogin(user);
     } catch (e) {

@@ -1,5 +1,5 @@
 /**
- * SHREYANSH FINANCIAL OS — Google Apps Script Backend
+ * FINANCIAL OS - Google Apps Script Backend
  * ====================================================
  * Deploy as: Execute as → Me | Who has access → Anyone
  *
@@ -10,10 +10,21 @@
  *
  * MASTER SHEET ID (hardcoded server-side — never exposed to users):
  */
-const MASTER_SHEET_ID = 'YOUR_MASTER_SHEET_ID_HERE'; // ← paste your sheet ID here
+const MASTER_SHEET_ID = PropertiesService.getScriptProperties().getProperty('MASTER_SHEET_ID');
 
 // Admin email configured for control panel access
-const ADMIN_EMAIL = 'testaiworkforcollage@gmail.com';
+const ADMIN_EMAIL = PropertiesService.getScriptProperties().getProperty('ADMIN_EMAIL') || '';
+const GOOGLE_CLIENT_ID = PropertiesService.getScriptProperties().getProperty('GOOGLE_CLIENT_ID') || '';
+const OPENROUTER_API_KEY = PropertiesService.getScriptProperties().getProperty('OPENROUTER_API_KEY') || '';
+const OPENROUTER_MODEL = PropertiesService.getScriptProperties().getProperty('OPENROUTER_MODEL') || 'openrouter/free';
+const ALLOWED_ACTIONS = [
+  'initUser', 'getUserStatus', 'getAdminRegistry', 'toggleUserStatus',
+  'getConfig', 'setConfig', 'setConfigBatch', 'completeOnboarding',
+  'getExpenses', 'logExpense', 'deleteExpense', 'getIncome', 'logIncome',
+  'getGoals', 'setGoals', 'getBills', 'setBills', 'getMemory', 'logMemory',
+  'getBlueprint', 'setBlueprint', 'logSnapshot', 'checkUpdates', 'loadAll',
+  'createDynamicSheet', 'getDynamicSheet', 'appendDynamicRow', 'callAI',
+];
 
 // Dedicated Google Drive folder name for individual user spreadsheet files
 const FOLDER_NAME = 'Financial OS User Sheets';
@@ -32,25 +43,24 @@ const SCHEMAS = {
   Blueprint:       ['Email', 'SectionID', 'Name', 'Icon', 'SheetRef', 'Status', 'CreatedOn'],
 };
 
-const REGISTRY_SCHEMA = ['Email', 'UserID', 'Name', 'SpreadsheetID', 'SpreadsheetURL', 'Status', 'CreatedOn', 'LastActiveOn'];
-
-// Default budgets for new users
-const DEFAULT_BUDGETS = {
-  Housing: 7200, Food: 6620, Health: 1500, Telecom: 566,
-  Subscriptions: 2098, Transport: 2000, Savings: 6000, Other: 0,
-};
+const REGISTRY_SCHEMA = ['Email', 'UserID', 'Name', 'SpreadsheetID', 'SpreadsheetURL', 'Status', 'CreatedOn', 'LastActiveOn', 'Reason'];
 
 // ─── ENTRY POINT ──────────────────────────────────────────────────────────────
 
 function doPost(e) {
   try {
+    if (!e.postData?.contents || e.postData.contents.length > 250000) {
+      return jsonResponse({ success: false, error: 'Invalid or oversized request.' });
+    }
     const body = JSON.parse(e.postData.contents);
     const { action, email, token, data } = body;
 
     if (!email) return jsonResponse({ success: false, error: 'Missing email' });
+    if (!ALLOWED_ACTIONS.includes(action)) return jsonResponse({ success: false, error: 'Unknown action.' });
 
     // 1. Server-side Google OAuth Token Verification
-    verifyToken(token, email);
+    const identity = verifyToken(token, email);
+    enforceRequestRateLimit(identity.sub);
 
     // 2. Admin-only actions routing
     if (action === 'getAdminRegistry') {
@@ -72,13 +82,16 @@ function doPost(e) {
     }
 
     // 3. User operations: Get or create dedicated user Spreadsheet ID
-    const userSsId = getUserSpreadsheetId(email, action === 'initUser' ? data?.name : null);
+    const userSsId = getUserSpreadsheetId(identity.sub, email, action === 'initUser' ? data?.name : null);
 
     let result;
     switch (action) {
       case 'initUser':       result = { success: true }; break; // getUserSpreadsheetId handled creation/validation
       case 'getConfig':      result = getConfig(userSsId, email); break;
       case 'setConfig':      result = setConfig(userSsId, email, data.key, data.value); break;
+      case 'setConfigBatch': result = setConfigBatch(userSsId, email, data); break;
+      case 'completeOnboarding': result = completeOnboarding(userSsId, email, data); break;
+      case 'callAI':         result = callAI(email, data); break;
       case 'getExpenses':    result = getExpenses(userSsId, email); break;
       case 'logExpense':     result = logExpense(userSsId, email, data); break;
       case 'deleteExpense':  result = deleteExpense(userSsId, email, data); break;
@@ -120,6 +133,7 @@ function jsonResponse(obj) {
 }
 
 function getSpreadsheet() {
+  if (!MASTER_SHEET_ID) throw new Error('MASTER_SHEET_ID is not configured in Script Properties.');
   return SpreadsheetApp.openById(MASTER_SHEET_ID);
 }
 
@@ -141,13 +155,27 @@ function verifyToken(token, email) {
   if (!verifiedEmail || verifiedEmail.toLowerCase() !== email.toLowerCase()) {
     throw new Error('Authentication failed: Google account mismatch.');
   }
-  return true;
+  if (GOOGLE_CLIENT_ID && tokenInfo.aud !== GOOGLE_CLIENT_ID) {
+    throw new Error('Authentication failed: OAuth audience mismatch.');
+  }
+  if (!tokenInfo.sub) throw new Error('Authentication failed: Stable Google user ID missing.');
+  return tokenInfo;
 }
 
 /**
  * Resolves or creates a dedicated Google Spreadsheet for a user, checking for suspension.
  */
-function getUserSpreadsheetId(email, name) {
+function getUserSpreadsheetId(userId, email, name) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    return getUserSpreadsheetIdUnlocked(userId, email, name);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function getUserSpreadsheetIdUnlocked(userId, email, name) {
   const masterSs = getSpreadsheet();
   let registrySheet = masterSs.getSheetByName('_Registry');
   if (!registrySheet) {
@@ -160,12 +188,15 @@ function getUserSpreadsheetId(email, name) {
   let userRowIndex = -1;
   let spreadsheetId = '';
   let status = 'Active';
+  let registryEmail = '';
 
   if (lastRow >= 2) {
     const registryData = registrySheet.getRange(1, 1, lastRow, REGISTRY_SCHEMA.length).getValues();
     for (let i = 1; i < registryData.length; i++) {
-      if (registryData[i][0].toString().toLowerCase() === email.toLowerCase()) {
+      if (registryData[i][1].toString() === userId ||
+          registryData[i][0].toString().toLowerCase() === email.toLowerCase()) {
         userRowIndex = i + 1;
+        registryEmail = registryData[i][0].toString();
         spreadsheetId = registryData[i][3].toString();
         status = registryData[i][5].toString();
         break;
@@ -180,6 +211,11 @@ function getUserSpreadsheetId(email, name) {
   const todayStr = new Date().toLocaleString('en-IN');
 
   if (userRowIndex !== -1 && spreadsheetId) {
+    registrySheet.getRange(userRowIndex, 2).setValue(userId);
+    if (registryEmail.toLowerCase() !== email.toLowerCase()) {
+      migrateUserEmail(spreadsheetId, registryEmail, email);
+      registrySheet.getRange(userRowIndex, 1).setValue(email);
+    }
     // Return existing sheet ID, update last active timestamp
     registrySheet.getRange(userRowIndex, 8).setValue(todayStr); // Column 8 is LastActiveOn
     return spreadsheetId;
@@ -199,8 +235,6 @@ function getUserSpreadsheetId(email, name) {
 
   const newSsId = newSs.getId();
   const newSsUrl = newSs.getUrl();
-  const newUserId = 'USR' + Math.floor(100000 + Math.random() * 900000);
-
   // Initialize pages / sub-sheets
   Object.keys(SCHEMAS).forEach(sheetName => {
     const headers = SCHEMAS[sheetName];
@@ -213,34 +247,50 @@ function getUserSpreadsheetId(email, name) {
   const defaultSheet = newSs.getSheetByName('Sheet1');
   if (defaultSheet) newSs.deleteSheet(defaultSheet);
 
-  // Write default config
+  // New accounts start clean. Onboarding writes user-owned profile and settings.
   const configSheet = newSs.getSheetByName('Config');
   const defaults = [
-    [email, 'Name', userName],
-    [email, 'Salary', '15000'],
+    [email, 'Name', ''],
+    [email, 'Salary', '0'],
     [email, 'HomeIncome', '0'],
     [email, 'ActiveMonth', new Date().toLocaleString('default', { month: 'short' })],
     [email, 'ActiveYear', new Date().getFullYear().toString()],
+    [email, 'OnboardingComplete', 'false'],
     [email, 'CreatedOn', new Date().toLocaleDateString('en-IN')],
   ];
-  Object.entries(DEFAULT_BUDGETS).forEach(([cat, amt]) => {
-    defaults.push([email, `Budget:${cat}`, amt.toString()]);
-  });
-  defaults.forEach(row => configSheet.appendRow(row));
+  defaults.forEach(row => configSheet.appendRow(sanitizeRow(row)));
 
   // Save to master registry
-  registrySheet.appendRow([
+  registrySheet.appendRow(sanitizeRow([
     email,
-    newUserId,
+    userId,
     userName,
     newSsId,
     newSsUrl,
     'Active',
     todayStr,
-    todayStr
-  ]);
+    todayStr,
+    ''
+  ]));
 
   return newSsId;
+}
+
+function migrateUserEmail(ssId, oldEmail, newEmail) {
+  const ss = SpreadsheetApp.openById(ssId);
+  Object.keys(SCHEMAS).forEach(sheetName => {
+    const sheet = ss.getSheetByName(sheetName);
+    if (!sheet || sheet.getLastRow() < 2) return;
+    const values = sheet.getRange(2, 1, sheet.getLastRow() - 1, 1).getValues();
+    let changed = false;
+    values.forEach(row => {
+      if (row[0]?.toString().toLowerCase() === oldEmail.toLowerCase()) {
+        row[0] = newEmail;
+        changed = true;
+      }
+    });
+    if (changed) sheet.getRange(2, 1, values.length, 1).setValues(values);
+  });
 }
 
 function getOrCreateUserFolder() {
@@ -305,7 +355,7 @@ function readUserRows(ssId, sheetName, email) {
 function appendUserRow(ssId, sheetName, email, rowValues) {
   const ss = SpreadsheetApp.openById(ssId);
   const sheet = ensureSheet(ss, sheetName);
-  sheet.appendRow([email, ...rowValues]);
+  sheet.appendRow(sanitizeRow([email, ...rowValues]));
   return { success: true };
 }
 
@@ -332,7 +382,7 @@ function replaceUserRows(ssId, sheetName, email, rowsArray) {
     }
   }
 
-  rowsArray.forEach(row => sheet.appendRow([email, ...row]));
+  rowsArray.forEach(row => sheet.appendRow(sanitizeRow([email, ...row])));
   return { success: true };
 }
 
@@ -370,6 +420,7 @@ function getAdminRegistry() {
 
 function toggleUserStatus(targetEmail, status, reason = '') {
   try {
+    if (!['Active', 'Suspended'].includes(status)) return { success: false, error: 'Invalid user status.' };
     const masterSs = getSpreadsheet();
     let registrySheet = masterSs.getSheetByName('_Registry');
     if (!registrySheet) return { success: false, error: 'Registry not found.' };
@@ -381,7 +432,7 @@ function toggleUserStatus(targetEmail, status, reason = '') {
     for (let i = 1; i < registryData.length; i++) {
       if (registryData[i][0].toString().toLowerCase() === targetEmail.toLowerCase()) {
         registrySheet.getRange(i + 1, 6).setValue(status); // Column 6 is Status
-        registrySheet.getRange(i + 1, 9).setValue(reason); // Column 9 is Reason
+        registrySheet.getRange(i + 1, 9).setValue(sanitizeCell(reason)); // Column 9 is Reason
         return { success: true };
       }
     }
@@ -430,6 +481,7 @@ function getConfig(ssId, email) {
 
 function setConfig(ssId, email, key, value) {
   try {
+    validateConfigKey(key);
     const ss = SpreadsheetApp.openById(ssId);
     const sheet = ensureSheet(ss, 'Config');
     const lastRow = sheet.getLastRow();
@@ -439,16 +491,103 @@ function setConfig(ssId, email, key, value) {
       for (let i = 1; i < allData.length; i++) {
         if (allData[i][0]?.toString().toLowerCase() === email.toLowerCase() &&
             allData[i][1]?.toString() === key) {
-          sheet.getRange(i + 1, 3).setValue(value);
+          sheet.getRange(i + 1, 3).setValue(sanitizeCell(value));
           return { success: true };
         }
       }
     }
-    sheet.appendRow([email, key, value]);
+    sheet.appendRow(sanitizeRow([email, key, value]));
     return { success: true };
   } catch (err) {
     return { success: false, error: err.toString() };
   }
+}
+
+function setConfigBatch(ssId, email, values) {
+  try {
+    const keys = Object.keys(values || {});
+    if (keys.length > 100) return { success: false, error: 'Too many configuration values.' };
+    for (let i = 0; i < keys.length; i++) {
+      const result = setConfig(ssId, email, keys[i], values[keys[i]]);
+      if (!result.success) return result;
+    }
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.toString() };
+  }
+}
+
+function completeOnboarding(ssId, email, profile) {
+  try {
+    const cleanProfile = {
+      name: profile.name || '',
+      profession: profile.profession || '',
+      sideIncome: Array.isArray(profile.sideIncome) ? profile.sideIncome : [],
+      personality: profile.personality || '',
+      welcomeNote: profile.welcomeNote || '',
+      theme: profile.theme || null,
+    };
+    const configResult = setConfigBatch(ssId, email, {
+      Name: cleanProfile.name,
+      ProfileJSON: JSON.stringify(cleanProfile),
+      ThemeJSON: JSON.stringify(cleanProfile.theme || {}),
+    });
+    if (!configResult.success) return configResult;
+    if (Array.isArray(profile.goals)) {
+      const goalsResult = setGoals(ssId, email, profile.goals);
+      if (!goalsResult.success) return goalsResult;
+    }
+    const memoryParts = [
+      cleanProfile.name ? 'Name: ' + cleanProfile.name : '',
+      cleanProfile.profession ? 'Profession: ' + cleanProfile.profession : '',
+      cleanProfile.personality ? 'Money personality: ' + cleanProfile.personality : '',
+      Array.isArray(profile.goals) && profile.goals.length
+        ? 'Goals: ' + profile.goals.map(goal => goal.name).filter(Boolean).join(', ')
+        : '',
+    ].filter(Boolean);
+    if (memoryParts.length) {
+      const memoryResult = logMemory(ssId, email, {
+        type: 'onboarding_profile',
+        observation: memoryParts.join(' | '),
+      });
+      if (!memoryResult.success) return memoryResult;
+    }
+    const completionResult = setConfig(ssId, email, 'OnboardingComplete', 'true');
+    if (!completionResult.success) return completionResult;
+    return { success: true, profile: cleanProfile };
+  } catch (err) {
+    return { success: false, error: err.toString() };
+  }
+}
+
+function callAI(email, request) {
+  if (!OPENROUTER_API_KEY) return { success: false, error: 'AI gateway is not configured.' };
+  const cache = CacheService.getScriptCache();
+  const rateKey = 'ai_rate_' + Utilities.base64EncodeWebSafe(email.toLowerCase()).slice(0, 80);
+  const requestCount = Number(cache.get(rateKey) || 0);
+  if (requestCount >= 30) return { success: false, error: 'AI rate limit reached. Try again shortly.' };
+  cache.put(rateKey, String(requestCount + 1), 60);
+  const messages = Array.isArray(request.messages) ? request.messages.slice(-80) : [];
+  if (messages.length === 0) return { success: false, error: 'AI request has no messages.' };
+  if (JSON.stringify(messages).length > 100000) return { success: false, error: 'AI request is too large.' };
+  const payload = {
+    model: OPENROUTER_MODEL,
+    messages: messages,
+    temperature: Math.max(0, Math.min(Number(request.temperature) || 0.7, 1.5)),
+    max_tokens: Math.max(1, Math.min(Number(request.maxTokens) || 600, 1200)),
+  };
+  const response = UrlFetchApp.fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'post',
+    contentType: 'application/json',
+    headers: { Authorization: 'Bearer ' + OPENROUTER_API_KEY, 'X-Title': 'Financial OS' },
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true,
+  });
+  const data = JSON.parse(response.getContentText() || '{}');
+  if (response.getResponseCode() < 200 || response.getResponseCode() >= 300) {
+    return { success: false, error: data.error?.message || 'AI provider request failed.' };
+  }
+  return { success: true, content: data.choices?.[0]?.message?.content || '' };
 }
 
 function getExpenses(ssId, email) {
@@ -579,6 +718,7 @@ function getGoals(ssId, email) {
 
 function setGoals(ssId, email, goals) {
   try {
+    if (!Array.isArray(goals) || goals.length > 100) return { success: false, error: 'Invalid goals payload.' };
     const rows = goals.map(g => [g.id, g.name, g.target, g.saved, g.monthlyAdd, g.deadline, g.icon, g.color, g.status]);
     return replaceUserRows(ssId, 'SavingsGoals', email, rows);
   } catch (err) {
@@ -602,6 +742,7 @@ function getBills(ssId, email) {
 
 function setBills(ssId, email, bills) {
   try {
+    if (!Array.isArray(bills) || bills.length > 100) return { success: false, error: 'Invalid bills payload.' };
     const rows = bills.map(b => [b.id, b.name, b.amount, b.dueDate, b.frequency, b.category, b.status, b.lastPaid || '']);
     return replaceUserRows(ssId, 'BillCalendar', email, rows);
   } catch (err) {
@@ -621,8 +762,14 @@ function getMemory(ssId, email) {
 
 function logMemory(ssId, email, mem) {
   try {
+    const observation = String(mem?.observation || '').trim();
+    if (!observation || observation.length > 5000) return { success: false, error: 'Invalid memory payload.' };
+    const existing = readUserRows(ssId, 'AIMemory', email).some(
+      row => String(row.obj.Observation || '').trim().toLowerCase() === observation.toLowerCase()
+    );
+    if (existing) return { success: true, duplicate: true };
     return appendUserRow(ssId, 'AIMemory', email, [
-      new Date().toLocaleDateString('en-IN'), mem.type, mem.observation,
+      new Date().toLocaleDateString('en-IN'), mem.type, observation,
     ]);
   } catch (err) {
     return { success: false, error: err.toString() };
@@ -680,6 +827,9 @@ function loadAll(ssId, email) {
     const billsResult = getBills(ssId, email);
     const memoryResult = getMemory(ssId, email);
     const blueprintResult = getBlueprint(ssId, email);
+    const requiredResults = [configResult, expensesResult, incomeResult, goalsResult, billsResult, memoryResult, blueprintResult];
+    const failedResult = requiredResults.find(result => !result.success);
+    if (failedResult) return { success: false, error: failedResult.error || 'Could not load user workspace.' };
 
     const cfg = configResult.data || {};
     const budgets = {};
@@ -689,6 +839,7 @@ function loadAll(ssId, email) {
 
     return {
       success: true,
+      isAdmin: !!ADMIN_EMAIL && email.toLowerCase() === ADMIN_EMAIL.toLowerCase(),
       tracker: expensesResult.data,
       income: incomeResult.data,
       savingsGoals: goalsResult.data,
@@ -696,16 +847,28 @@ function loadAll(ssId, email) {
       aiMemory: memoryResult.data,
       blueprint: blueprintResult.data,
       config: {
-        name: cfg.Name || 'User',
-        salary: parseFloat(cfg.Salary) || 15000,
+        name: cfg.Name || '',
+        salary: parseFloat(cfg.Salary) || 0,
         homeIncome: parseFloat(cfg.HomeIncome) || 0,
         activeMonth: cfg.ActiveMonth || new Date().toLocaleString('default', { month: 'short' }),
         activeYear: parseInt(cfg.ActiveYear) || new Date().getFullYear(),
         budgets: Object.keys(budgets).length > 0 ? budgets : undefined,
+        ThemeJSON: cfg.ThemeJSON || '',
       },
+      profile: parseJsonOrNull(cfg.ProfileJSON),
+      isOnboarded: cfg.OnboardingComplete === 'true',
     };
   } catch (err) {
     return { success: false, error: err.toString() };
+  }
+}
+
+function parseJsonOrNull(value) {
+  if (!value) return null;
+  try {
+    return JSON.parse(value);
+  } catch (err) {
+    return null;
   }
 }
 
@@ -719,6 +882,7 @@ function checkUpdates(ssId, email) {
 }
 
 function ensureDynamicSheet(ss, sheetName, headers) {
+  validateDynamicSheetRequest(sheetName, headers);
   let sheet = ss.getSheetByName(sheetName);
   if (!sheet) {
     sheet = ss.insertSheet(sheetName);
@@ -730,6 +894,21 @@ function ensureDynamicSheet(ss, sheetName, headers) {
     sheet.setFrozenRows(1);
   }
   return sheet;
+}
+
+function validateDynamicSheetRequest(sheetName, headers) {
+  if (!/^[A-Za-z][A-Za-z0-9_]{0,49}$/.test(sheetName || '')) {
+    throw new Error('Invalid dynamic sheet name.');
+  }
+  if (SCHEMAS[sheetName]) throw new Error('Core sheets cannot be managed dynamically.');
+  if (!Array.isArray(headers) || headers.length < 1 || headers.length > 30) {
+    throw new Error('Invalid dynamic sheet headers.');
+  }
+  headers.forEach(header => {
+    if (!/^[A-Za-z][A-Za-z0-9_ ]{0,49}$/.test(String(header || ''))) {
+      throw new Error('Invalid dynamic sheet header.');
+    }
+  });
 }
 
 function createDynamicSheet(ssId, email, tabName, headers) {
@@ -755,11 +934,12 @@ function getDynamicSheet(ssId, email, tabName) {
     const allData = sheet.getRange(1, 1, lastRow, lastCol).getValues();
     const headers = allData[0];
     const emailIdx = headers.indexOf('Email');
+    if (emailIdx === -1) return { success: false, error: 'Dynamic sheet is missing its ownership column.', data: [] };
     
     const data = [];
     for (let i = 1; i < allData.length; i++) {
       const row = allData[i];
-      if (emailIdx === -1 || row[emailIdx]?.toString().toLowerCase() === email.toLowerCase()) {
+      if (row[emailIdx]?.toString().toLowerCase() === email.toLowerCase()) {
         const obj = {};
         headers.forEach((h, j) => {
           if (h !== 'Email') obj[h] = row[j];
@@ -775,6 +955,7 @@ function getDynamicSheet(ssId, email, tabName) {
 
 function appendDynamicRow(ssId, email, tabName, rowData) {
   try {
+    if (JSON.stringify(rowData || {}).length > 50000) return { success: false, error: 'Dynamic row is too large.' };
     const ss = SpreadsheetApp.openById(ssId);
     let sheet = ss.getSheetByName(tabName);
     if (!sheet) return { success: false, error: 'Sheet does not exist: ' + tabName };
@@ -797,9 +978,33 @@ function appendDynamicRow(ssId, email, tabName, rowData) {
       });
     }
     
-    sheet.appendRow(newRow);
+    sheet.appendRow(sanitizeRow(newRow));
     return { success: true };
   } catch (err) {
     return { success: false, error: err.toString() };
   }
+}
+
+function sanitizeRow(row) {
+  return row.map(sanitizeCell);
+}
+
+function sanitizeCell(value) {
+  if (typeof value !== 'string') return value;
+  return /^[=+\-@]/.test(value) ? "'" + value : value;
+}
+
+function validateConfigKey(key) {
+  const allowed = ['Name', 'Salary', 'HomeIncome', 'ActiveMonth', 'ActiveYear', 'ThemeJSON', 'ProfileJSON', 'OnboardingComplete'];
+  if (allowed.includes(key)) return;
+  if (/^Budget:[A-Za-z0-9 _-]{1,50}$/.test(key || '')) return;
+  throw new Error('Invalid configuration key.');
+}
+
+function enforceRequestRateLimit(userId) {
+  const cache = CacheService.getScriptCache();
+  const key = 'request_rate_' + Utilities.base64EncodeWebSafe(userId).slice(0, 80);
+  const count = Number(cache.get(key) || 0);
+  if (count >= 120) throw new Error('Request rate limit reached. Try again shortly.');
+  cache.put(key, String(count + 1), 60);
 }

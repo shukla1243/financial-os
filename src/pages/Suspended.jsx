@@ -2,20 +2,13 @@ import React from 'react';
 import { ShieldAlert, LogOut, Mail } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { revokeToken } from '../services/googleAuth';
-import { clearStoredTheme } from '../services/themeEngine';
 
 export default function Suspended() {
   const { state, dispatch } = useApp();
 
   const handleSignOut = () => {
     revokeToken();
-    const email = state.user?.email;
-    if (email) {
-      clearStoredTheme(email);
-    }
-    dispatch({ type: 'SET_USER', payload: null });
-    dispatch({ type: 'LOAD_STATE', payload: { isOnboarded: false, isLoggedIn: false, user: null } });
-    localStorage.removeItem('financial-os-v4');
+    dispatch({ type: 'RESET_SESSION' });
     window.location.reload();
   };
 
@@ -81,7 +74,7 @@ export default function Suspended() {
           gap: '10px'
         }}>
           <a
-            href="mailto:testaiworkforcollage@gmail.com?subject=Financial OS Suspension Appeal"
+            href="mailto:?subject=Financial OS Suspension Appeal"
             style={{
               textDecoration: 'none',
               background: 'rgba(255, 255, 255, 0.08)',

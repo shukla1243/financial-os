@@ -108,7 +108,7 @@ export async function readDynamicSheet(proxyUrl, email, sheetName) {
  * Scans recent expenses for patterns → registers new sections in Blueprint.
  * Returns array of newly detected sections + AI insights.
  */
-export async function runConsciousnessScan(proxyUrl, email, geminiKey, recentData) {
+export async function runConsciousnessScan(proxyUrl, email, recentData) {
   if (!proxyUrl || !email) return { newSections: [], insights: [] };
 
   const existingBlueprint = await readBlueprint(proxyUrl, email);
@@ -155,9 +155,9 @@ export async function runConsciousnessScan(proxyUrl, email, geminiKey, recentDat
   }
 
   // Generate insights from spending patterns
-  if (geminiKey && recentData.length > 5) {
+  if (recentData.length > 5) {
     try {
-      const insight = await generateInsight(geminiKey, recentData);
+      const insight = await generateInsight(recentData);
       if (insight) insights.push(insight);
     } catch (e) {}
   }
@@ -165,7 +165,7 @@ export async function runConsciousnessScan(proxyUrl, email, geminiKey, recentDat
   return { newSections, insights };
 }
 
-async function generateInsight(geminiKey, recentData) {
+async function generateInsight(recentData) {
   const summary = recentData.slice(-20).map(d => `${d.description}: ₹${d.amount}`).join(', ');
   const prompt = `You are a personal finance AI. Based on these recent expenses: ${summary}
   
@@ -177,7 +177,6 @@ Format: just the insight text, nothing else.`;
       contents: prompt,
       temperature: 0.7,
       maxTokens: 150,
-      key: geminiKey,
     });
     return data.candidates?.[0]?.content?.parts?.[0]?.text || null;
   } catch (e) { return null; }

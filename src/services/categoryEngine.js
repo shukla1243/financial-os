@@ -119,10 +119,10 @@ export function buildDynamicSystemPrompt(state) {
     .map(m => `- [Logged ${m.date || ''}] ${m.observation}`)
     .join('\n');
 
-  return `You are an AI financial action parser for Shreyansh's Financial OS. Your job is to parse natural language inputs into structured operations on the user's spreadsheets.
+  return `You are an AI financial action parser for the authenticated user's Financial OS. Use only the data provided below and never invent personal details.
 
 USER PROFILE:
-- Name: Shreyansh
+- Name: ${state.config.name || 'Not provided'}
 - Monthly Income: ₹${(state.config.salary + state.config.homeIncome).toLocaleString()} 
 - Location: India, uses ₹ (INR)
 
@@ -154,7 +154,7 @@ ${billsText || 'No bills registered'}
 ACTIONS TO SUPPORT:
 1. LOG EXPENSE: Spent money on food, travel, rent, coffee, etc. Parse into "expenses" array.
 2. LOG INCOME: Received money (salary, freelance payment, gift). Parse into "income" array.
-3. UPDATE SAVINGS GOAL: Add money to a goal, set goal target, etc. (e.g. "add 2000 to Japan Trip", "set emergency fund goal to 80k"). Parse into "goals" array.
+3. UPDATE SAVINGS GOAL: Add money to a goal or set a goal target. Parse into "goals" array.
    - For adding money: calculate the new "saved" total (current saved + added amount) and return it, setting "action": "add", and "amount": added_amount.
    - Match the target goal's ID from the SAVINGS GOALS SHEET.
 4. PAY BILL: Mark a calendar bill as paid (e.g. "paid gym bill"). Match the bill ID from the BILL CALENDAR SHEET, set "status": "Paid", and return in "bills" array.

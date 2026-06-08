@@ -1,21 +1,14 @@
 import React from 'react';
 import { LogOut } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { clearStoredTheme } from '../services/themeEngine';
 import { revokeToken } from '../services/googleAuth';
 
 export default function LogoutButton() {
-  const { state, dispatch } = useApp();
+  const { dispatch } = useApp();
 
   const handleLogout = () => {
     revokeToken();
-    const email = state.user?.email;
-    if (email) {
-      clearStoredTheme(email);
-    }
-    dispatch({ type: 'SET_USER', payload: null });
-    dispatch({ type: 'LOAD_STATE', payload: { isOnboarded: false, isLoggedIn: false, user: null } });
-    localStorage.removeItem('financial-os-v4');
+    dispatch({ type: 'RESET_SESSION' });
     window.location.reload();
   };
 

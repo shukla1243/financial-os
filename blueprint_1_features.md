@@ -7,9 +7,9 @@
 ## 1. AUTHENTICATION SYSTEM
 
 ### Google OAuth Flow (`src/services/googleAuth.js`)
-- **CLIENT_ID**: `890653078504-pbm6a18qthf9j97iotc4vakkf056k1vj.apps.googleusercontent.com`
+- **CLIENT_ID**: Configure `REACT_APP_GOOGLE_CLIENT_ID` in the deployment environment.
 - **SCOPES**: `email profile` (minimized — NO Sheets/Drive scopes on client)
-- **Token persistence**: Saved to `localStorage` key `financial-os-oauth-token` with `expires_at` timestamp
+- **Token persistence**: Saved only for the active browser tab session.
 - **Silent refresh**: On page reload, reads token from localStorage; if expired, calls `tokenClient.requestAccessToken()` without `prompt` param (not `'none'` — that causes Google to hang)
 - **Force prompt**: `getAccessToken(true)` triggers `prompt: 'consent'` for fresh login
 - **User info**: Fetched from `googleapis.com/oauth2/v2/userinfo` and cached in-memory as `currentUser`
@@ -22,7 +22,7 @@
 - **DO NOT CHANGE**: Login flow, error detection, initUser call order
 
 ### Session Restoration (`src/context/AppContext.jsx`)
-- `getInitialState()`: reads `localStorage.getItem('financial-os-v4')` synchronously in `useReducer` initializer
+- `getInitialState()`: always starts clean before authenticated user-scoped hydration.
 - Prevents React Strict Mode race condition where double-mount would overwrite state
 - Always forces `sheetsConfig.proxyUrl` from hardcoded `PROXY_URL` constant (never from localStorage)
 - **DO NOT CHANGE**: Initial state hydration logic, localStorage key, PROXY_URL enforcement
@@ -106,7 +106,7 @@ computed = { currentMonthExpenses, currentMonthIncome, totalIncome, totalExpense
 
 ### Effects (Background Processes)
 1. **Auto-Init on Login**: When `state.user.email` appears, calls `initUser` → `SET_SHEETS_CONFIG(connected:true)` → `loadAllFromProxy` → `LOAD_FROM_PROXY` → `readBlueprint`. Uses `autoInitRef` to run only once.
-2. **localStorage Persistence**: Saves full state on every change to `financial-os-v4`
+2. **User-scoped cache**: Saves non-secret offline state under the authenticated Google subject ID.
 3. **Consciousness Scan**: Runs `runConsciousnessScan` once after proxy connects (uses `consciousnessRanRef`)
 4. **Health Score Calculation**: Computes score from savings rate (40pts), budget adherence (30pts), streaks (20pts), goals (10pts)
 5. **Auto-Sync Poller** (15-second interval): Calls `proxyCheckUpdates` → compares `lastUpdated` timestamp → if newer, calls `syncFromSheets`. Uses `lastDriveUpdateRef`.
@@ -120,7 +120,7 @@ computed = { currentMonthExpenses, currentMonthIncome, totalIncome, totalExpense
 ### Architecture
 - **Registry-Directory Model**: Master spreadsheet has `_Registry` sheet. Each user gets their own private Google Drive Spreadsheet stored in folder `Financial OS User Sheets`.
 - **Server-side token verification**: Every request validates Google OAuth token via `https://oauth2.googleapis.com/tokeninfo`
-- **Admin email**: `testaiworkforcollage@gmail.com`
+- **Admin identity**: Configured server-side using Apps Script Properties.
 
 ### Sheet Schemas (per-user spreadsheet)
 | Sheet | Columns |

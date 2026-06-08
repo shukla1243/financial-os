@@ -1,16 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { writeMemory, writeGoals } from '../services/proxyService';
 import { Send, Zap, Loader } from 'lucide-react';
 import { callAI } from '../services/aiService';
-import { generateThemeFromVibe, THEME_PRESETS } from '../services/themeEngine';
+import { generateThemeFromVibe, personalizeTheme, THEME_PRESETS } from '../services/themeEngine';
 
 const ONBOARDING_PROMPT = `You are onboarding a user to their personal Financial OS app. Have a warm, natural anime-themed conversation to learn about them.
 
 Your goal is to learn:
 1. Their name and profession/job
 2. Any side income (freelance, sponsorships etc.)
-3. Their top 3 financial goals with target amounts (e.g. Japan Trip ₹50k, Emergency Fund ₹1L)
+3. Their top financial goals with target amounts
 4. Their money personality (saver, spender, investor?)
 5. Monthly savings capacity (how much they can save per month)
 
@@ -24,35 +23,34 @@ Colors: cyan, purple, pink, gold, success, orange.
 CRITICAL: Speak directly to the user as a warm, human-like anime companion. Do NOT output any system headers, comments, wrappers, tags, or prefixes (like "// Start Onboarding Sequence //" or "Response:"). Start by greeting them warmly.`;
 
 export default function Onboarding() {
-  const { state, dispatch } = useApp();
+  const { state, dispatch, completeOnboarding } = useApp();
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [geminiKey, setGeminiKey] = useState(state.geminiKey || '');
-  const [keyEntered, setKeyEntered] = useState(false);
+  const [keyEntered, setKeyEntered] = useState(true);
   const bottomRef = useRef(null);
   const conversationRef = useRef([]);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
-  // If gemini key already saved, auto-start onboarding chat
+  // AI is provided by the authenticated backend gateway; no browser API key is required.
   useEffect(() => {
-    if (state.geminiKey && !keyEntered) {
-      setGeminiKey(state.geminiKey);
+    if (messages.length === 0) {
       setKeyEntered(true);
       setLoading(true);
-      callGemini(state.geminiKey, [{ role: 'user', parts: [{ text: 'Start the onboarding.' }] }])
+      callGemini('', [{ role: 'user', parts: [{ text: 'Start the onboarding.' }] }])
         .then(aiMsg => {
           conversationRef.current = [{ role: 'model', parts: [{ text: aiMsg }] }];
           setMessages([{ role: 'ai', text: aiMsg }]);
         })
         .catch((e) => {
           console.error("Failed to auto-start onboarding chat:", e);
-          setKeyEntered(false);
+          setMessages([{ role: 'ai', text: 'AI onboarding is temporarily unavailable. You can skip and configure your account manually.' }]);
         })
         .finally(() => setLoading(false));
     }
-  }, [state.geminiKey]);
+  }, []);
 
   const callGemini = async (key, history) => {
     const data = await callAI({
@@ -110,32 +108,23 @@ export default function Onboarding() {
           const goals = profile.goals.map((g, i) => ({
             id: Date.now() + i,
             name: g.name,
-            target: g.target || 50000,
+            target: Number(g.target) || 0,
             saved: 0,
-            monthlyAdd: g.monthlyAdd || 1000,
-            deadline: g.deadline || 'Dec 2027',
+            monthlyAdd: Number(g.monthlyAdd) || 0,
+            deadline: g.deadline || '',
             icon: g.icon || '🎯',
             color: g.color || 'purple',
             status: 'On Track',
           }));
+          profile.goals = goals;
           dispatch({ type: 'SET_GOALS', payload: goals });
-          if (state.sheetsConfig?.proxyUrl && state.user?.email) {
-            writeGoals(state.sheetsConfig.proxyUrl, state.user.email, goals).catch(() => {});
-          }
-        }
-
-        // Write to AIMemory if proxy is connected
-        if (state.sheetsConfig?.proxyUrl && state.user?.email) {
-          try {
-            await writeMemory(state.sheetsConfig.proxyUrl, state.user.email, 'Profile',
-              `Name: ${profile.name} | Profession: ${profile.profession} | Goals: ${profile.goals?.map(g => g.name).join(', ')} | Personality: ${profile.personality}`);
-          } catch (e) {}
         }
 
         // Generate Theme
         let generatedTheme = null;
         try {
-          const vibe = `A custom theme for a ${profile.profession || 'professional'} who is a ${profile.personality || 'saver'} named ${profile.name}.`;
+          const goalNames = profile.goals?.map(goal => goal.name).filter(Boolean).join(', ') || 'building financial stability';
+          const vibe = `A personalized Financial OS theme for a ${profile.profession || 'professional'} with a ${profile.personality || 'balanced'} money personality. Their goals are ${goalNames}. Make the visual identity distinct and motivating.`;
           generatedTheme = await generateThemeFromVibe(geminiKey || state.geminiKey, vibe);
         } catch (themeErr) {
           console.error("Failed to generate theme:", themeErr);
@@ -154,12 +143,12 @@ export default function Onboarding() {
           }
         }
 
-        profile.theme = generatedTheme;
+        profile.theme = personalizeTheme(
+          generatedTheme,
+          `${state.user?.sub || state.user?.userId || ''}:${profile.personality || ''}:${profile.profession || ''}`
+        );
 
-        // Complete onboarding after 2s
-        setTimeout(() => {
-          dispatch({ type: 'SET_ONBOARDED', payload: profile });
-        }, 2000);
+        await completeOnboarding(profile);
       } else {
         setMessages(prev => [...prev, { role: 'ai', text: aiText }]);
       }
@@ -169,7 +158,7 @@ export default function Onboarding() {
     } finally { setLoading(false); }
   };
 
- const skipOnboarding = () => {
+ const skipOnboarding = async () => {
   if (geminiKey) {
     dispatch({
       type: 'SET_GEMINI_KEY',
@@ -177,17 +166,19 @@ export default function Onboarding() {
     });
   }
 
-  dispatch({
-    type: 'SET_ONBOARDED',
-    payload: {
+  try {
+    await completeOnboarding({
       name: '',
       profession: '',
+      sideIncome: [],
       goals: [],
       personality: '',
       welcomeNote: 'Welcome to Financial OS! 🚀',
-      theme: THEME_PRESETS.cyberpunk
-    }
-  });
+      theme: personalizeTheme(THEME_PRESETS.cyberpunk, state.user?.sub || state.user?.userId || state.user?.email)
+    });
+  } catch (error) {
+    alert(error.message);
+  }
 };
 
   return (

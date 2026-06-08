@@ -327,7 +327,7 @@ Return ONLY a JSON array matching this format (no markdown code blocks, no trail
   const totalReturnPct = totalInvested > 0 ? (totalReturns / totalInvested) * 100 : 0;
 
   // Net Worth Chart Allocation
-  const cashBuffer = totalCurrentValue > 0 ? 15000 : 0; // Fallback cash buffer
+  const cashBuffer = 0;
   const netWorthData = [
     { name: 'Mutual Funds', value: Math.round(mfCurrent), color: 'var(--primary-color)' },
     { name: 'Crypto', value: Math.round(cryptoCurrent), color: 'var(--accent-color)' },

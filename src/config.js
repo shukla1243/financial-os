@@ -16,9 +16,8 @@
 export const PROXY_URL = process.env.REACT_APP_PROXY_URL;
 
 // ─── AI (OPENROUTER) ─────────────────────────────────────────────────────────
-// Your OpenRouter API key (supports free models like gemini-2.5-flash-lite:free).
-// Get a free key at: https://openrouter.ai/keys
-export const GEMINI_KEY = process.env.REACT_APP_GEMINI_KEY;
+// AI provider keys must be entered per session or supplied by a server-side gateway.
+export const GEMINI_KEY = 'server-managed';
 
 // ─── APP META ─────────────────────────────────────────────────────────────────
 export const APP_VERSION = '4.0.0';

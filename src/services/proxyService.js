@@ -12,7 +12,7 @@
 
 // ─── CORE HTTP HELPER ────────────────────────────────────────────────────────
 
-import { getAccessToken } from './googleAuth';
+import { getAccessToken, getCurrentUser } from './googleAuth';
 
 async function proxyPost(proxyUrl, action, email, data = null) {
   if (!proxyUrl) throw new Error('Apps Script URL not configured.');
@@ -25,7 +25,7 @@ async function proxyPost(proxyUrl, action, email, data = null) {
     throw new Error('Google Sign-In session has expired or is invalid. Please log in again.');
   }
 
-  const body = { action, email, token };
+  const body = { action, email, userId: getCurrentUser()?.sub || '', token };
   if (data !== null) body.data = data;
 
   const res = await fetch(proxyUrl, {
@@ -47,8 +47,8 @@ async function proxyPost(proxyUrl, action, email, data = null) {
  * Called once after first login.
  * Creates default config rows in the master sheet for this user.
  */
-export async function initUser(proxyUrl, email) {
-  return proxyPost(proxyUrl, 'initUser', email);
+export async function initUser(proxyUrl, email, name = '') {
+  return proxyPost(proxyUrl, 'initUser', email, { name });
 }
 
 export async function getUserStatus(proxyUrl, email) {
@@ -77,6 +77,18 @@ export async function readConfig(proxyUrl, email) {
 
 export async function upsertConfig(proxyUrl, email, key, value) {
   return proxyPost(proxyUrl, 'setConfig', email, { key, value: value.toString() });
+}
+
+export async function saveConfig(proxyUrl, email, values) {
+  return proxyPost(proxyUrl, 'setConfigBatch', email, values);
+}
+
+export async function completeOnboarding(proxyUrl, email, profile) {
+  return proxyPost(proxyUrl, 'completeOnboarding', email, profile);
+}
+
+export async function proxyAI(proxyUrl, email, request) {
+  return proxyPost(proxyUrl, 'callAI', email, request);
 }
 
 export async function readCategories(proxyUrl, email) {

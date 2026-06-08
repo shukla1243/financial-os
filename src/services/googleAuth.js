@@ -3,13 +3,14 @@
  * Full user identity + token management
  */
 
-const CLIENT_ID = '890653078504-pbm6a18qthf9j97iotc4vakkf056k1vj.apps.googleusercontent.com';
+const CLIENT_ID = process.env.REACT_APP_GOOGLE_CLIENT_ID;
 const SCOPES = 'email profile';
+const TOKEN_KEY = 'financial_os_oauth_session';
 
 let tokenClient = null;
 let currentToken = (() => {
   try {
-    const saved = localStorage.getItem('financial-os-oauth-token');
+    const saved = sessionStorage.getItem(TOKEN_KEY);
     if (saved) {
       const parsed = JSON.parse(saved);
       if (parsed.expires_at > Date.now()) {
@@ -34,6 +35,7 @@ export function loadGoogleAuth() {
 }
 
 export async function initTokenClient() {
+  if (!CLIENT_ID) throw new Error('Google OAuth client ID is not configured.');
   await loadGoogleAuth();
   tokenClient = window.google.accounts.oauth2.initTokenClient({
     client_id: CLIENT_ID,
@@ -58,7 +60,7 @@ export function getAccessToken(forcePrompt = false) {
         access_token: response.access_token,
         expires_at: Date.now() + (response.expires_in * 1000) - 60000,
       };
-      localStorage.setItem('financial-os-oauth-token', JSON.stringify(currentToken));
+      sessionStorage.setItem(TOKEN_KEY, JSON.stringify(currentToken));
       resolve(response.access_token);
     };
     if (forcePrompt) {
@@ -78,7 +80,8 @@ export async function getUserInfo() {
       headers: { 'Authorization': `Bearer ${token}` }
     });
     const data = await res.json();
-    currentUser = { email: data.email, name: data.name, picture: data.picture };
+    if (!data.id || !data.email || data.verified_email === false) return null;
+    currentUser = { sub: data.id, userId: data.id, email: data.email, name: data.name || '', picture: data.picture || '' };
     return currentUser;
   } catch (e) { return null; }
 }
@@ -93,7 +96,7 @@ export function revokeToken() {
   }
   currentToken = null;
   currentUser = null;
-  localStorage.removeItem('financial-os-oauth-token');
+  sessionStorage.removeItem(TOKEN_KEY);
 }
 
 

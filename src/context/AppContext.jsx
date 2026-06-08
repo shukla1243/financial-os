@@ -12,17 +12,21 @@ import {
   initUser,
   proxyCheckUpdates,
   getDynamicSheet,
+  completeOnboarding as proxyCompleteOnboarding,
+  saveConfig as proxySaveConfig,
 } from '../services/proxyService';
 import { runConsciousnessScan, readBlueprint } from '../services/consciousnessEngine';
 import { resolveAllInvestments } from '../services/walletService';
+import { clearLegacyStorage, getStableUserId, readUserState, writeUserState } from '../services/userStorage';
+import { calculateFinancialHealth } from '../services/financialHealth';
 
 const AppContext = createContext();
 
-const getInitialState = () => {
-  const defaultState = {
+export const createDefaultState = () => ({
     // Auth
     user: null, // { email, name, picture }
     isLoggedIn: false,
+    isSessionReady: false,
 
     // Onboarding
     profile: null,
@@ -68,37 +72,40 @@ const getInitialState = () => {
     streaks: { logging: 0, underBudget: 0, savingsGoal: 0 },
     level: 1,
     xp: 0,
-    financialHealthScore: 0,
+    financialHealthScore: null,
     isAdmin: false,
-  };
+  });
 
-  try {
-    const saved = localStorage.getItem('financial-os-v4');
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      return {
-        ...defaultState,
-        ...parsed,
-        sheetsConfig: {
-          proxyUrl: PROXY_URL,
-          connected: parsed.sheetsConfig?.connected || false,
-        },
-        geminiKey: parsed.geminiKey || DEFAULT_GEMINI_KEY || '',
-      };
-    }
-  } catch (e) {}
-  return defaultState;
+const getInitialState = () => {
+  clearLegacyStorage();
+  return createDefaultState();
 };
 
 function reducer(state, action) {
   switch (action.type) {
     case 'SET_USER':
       return { 
-        ...state, 
+        ...createDefaultState(),
         user: action.payload, 
         isLoggedIn: !!action.payload,
-        isAdmin: action.payload?.email?.toLowerCase() === 'testaiworkforcollage@gmail.com'
+        isAdmin: false
       };
+    case 'SWITCH_USER': {
+      const user = action.payload.user;
+      const cached = action.payload.cached || {};
+      return {
+        ...createDefaultState(),
+        ...cached,
+        user,
+        isLoggedIn: true,
+        isAdmin: false,
+        sheetsConfig: { proxyUrl: PROXY_URL, connected: false },
+      };
+    }
+    case 'RESET_SESSION':
+      return createDefaultState();
+    case 'SET_SESSION_READY':
+      return { ...state, isSessionReady: action.payload === true };
     case 'SET_ONBOARDED':
       return { 
         ...state, 
@@ -207,8 +214,11 @@ function reducer(state, action) {
             cardRadius: '12px',
             shadowIntensity: 'rgba(124, 58, 237, 0.15)',
           },
-          budgets: { ...state.config.budgets, ...(action.payload.config?.budgets || {}) },
+          budgets: action.payload.config?.budgets || {},
         },
+        profile: action.payload.profile || null,
+        isOnboarded: action.payload.isOnboarded === true,
+        isAdmin: action.payload.isAdmin === true,
       };
     }
     case 'SET_SUSPENDED':
@@ -276,20 +286,23 @@ function reducer(state, action) {
 export function AppProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, null, getInitialState);
   const consciousnessRanRef = useRef(false);
-  const autoInitRef = useRef(false);
+  const autoInitRef = useRef('');
   const lastDriveUpdateRef = useRef(0);
 
   // AUTO-INIT: when user logs in, silently init + sync using hardcoded PROXY_URL
   // No user configuration needed — happens automatically in the background
   useEffect(() => {
     const email = state.user?.email;
-    if (!email || !PROXY_URL || autoInitRef.current) return;
-    autoInitRef.current = true;
+    const userId = getStableUserId(state.user);
+    if (!email || !userId || !PROXY_URL || autoInitRef.current === userId) return;
+    autoInitRef.current = userId;
+    consciousnessRanRef.current = false;
+    lastDriveUpdateRef.current = 0;
 
     const autoInit = async () => {
       try {
         // Init user account (creates default rows if new user, no-op if returning)
-        const initRes = await initUser(PROXY_URL, email);
+        await initUser(PROXY_URL, email, state.user?.name || '');
         
         // 1. Get user status (Suspended Check)
         let isUserSuspended = false;
@@ -310,7 +323,7 @@ export function AppProvider({ children }) {
         // Apply per-user theme
         try {
           const { getStoredTheme, applyDynamicTheme } = await import('../services/themeEngine');
-          const storedTheme = getStoredTheme(email);
+          const storedTheme = getStoredTheme(userId);
           applyDynamicTheme(storedTheme);
           dispatch({ type: 'SET_CONFIG', payload: { theme: storedTheme } });
         } catch (themeErr) {}
@@ -321,10 +334,20 @@ export function AppProvider({ children }) {
         dispatch({ type: 'SET_SYNC_STATUS', payload: { status: 'syncing' } });
         const data = await loadAllFromProxy(PROXY_URL, email);
         if (data.success) {
+          if (data.config?.ThemeJSON) {
+            try {
+              const serverTheme = JSON.parse(data.config.ThemeJSON);
+              if (serverTheme && Object.keys(serverTheme).length > 0) {
+                const { setStoredTheme } = await import('../services/themeEngine');
+                setStoredTheme(userId, serverTheme);
+              }
+            } catch (themeError) {}
+          }
           const invData = await getDynamicSheet(PROXY_URL, email, 'Investments').catch(() => []);
           data.investments = await resolveAllInvestments(invData);
           dispatch({ type: 'LOAD_FROM_PROXY', payload: data });
           dispatch({ type: 'SET_SYNC_STATUS', payload: { status: 'success', time: new Date().toISOString() } });
+          dispatch({ type: 'SET_SESSION_READY', payload: true });
           const bp = await readBlueprint(PROXY_URL, email);
           if (bp.length > 0) dispatch({ type: 'SET_BLUEPRINT', payload: bp });
         } else {
@@ -337,13 +360,13 @@ export function AppProvider({ children }) {
     };
 
     autoInit();
-  }, [state.user?.email]);
+  }, [state.user]);
 
-  // Save to localStorage whenever state changes
+  // Save only to the authenticated user's scoped cache.
   useEffect(() => {
+    const userId = getStableUserId(state.user);
+    if (!userId || !state.isLoggedIn) return;
     const toSave = {
-      user: state.user,
-      isLoggedIn: state.isLoggedIn,
       profile: state.profile,
       isOnboarded: state.isOnboarded,
       config: state.config,
@@ -355,25 +378,23 @@ export function AppProvider({ children }) {
       monthlySnapshots: state.monthlySnapshots,
       aiMemory: state.aiMemory,
       sheetsConfig: state.sheetsConfig,
-      geminiKey: state.geminiKey,
       lastSynced: state.lastSynced,
       appBlueprint: state.appBlueprint,
       streaks: state.streaks,
       level: state.level,
       xp: state.xp,
       badges: state.badges,
-      isAdmin: state.isAdmin,
     };
-    localStorage.setItem('financial-os-v4', JSON.stringify(toSave));
+    writeUserState(userId, toSave);
   }, [state]);
 
   // Run consciousness scan once after proxy connects
   useEffect(() => {
     const { proxyUrl, connected } = state.sheetsConfig;
     const email = state.user?.email;
-    if (connected && proxyUrl && email && state.geminiKey && !consciousnessRanRef.current) {
+    if (connected && proxyUrl && email && !consciousnessRanRef.current) {
       consciousnessRanRef.current = true;
-      runConsciousnessScan(proxyUrl, email, state.geminiKey, state.tracker.slice(-50))
+      runConsciousnessScan(proxyUrl, email, state.tracker.slice(-50))
         .then(({ newSections, insights }) => {
           if (newSections.length > 0) {
             newSections.forEach(s => {
@@ -388,7 +409,7 @@ export function AppProvider({ children }) {
           });
         }).catch(() => {});
     }
-  }, [state.sheetsConfig?.connected, state.sheetsConfig?.proxyUrl, state.user?.email, state.geminiKey]);
+  }, [state.sheetsConfig?.connected, state.sheetsConfig?.proxyUrl, state.user?.email, state.tracker]);
 
   // (health score effect moved to after `computed` is defined below)
 
@@ -538,19 +559,30 @@ export function AppProvider({ children }) {
 
   // ─── ADD AI MEMORY FACT ──────────────────────────────────────────────────────
   const addMemoryFact = useCallback(async (observation, type = 'user_profile') => {
+    const normalized = String(observation || '').trim();
+    if (!normalized) return;
+    const alreadyKnown = state.aiMemory.some(
+      memory => String(memory.observation || '').trim().toLowerCase() === normalized.toLowerCase()
+    );
+    if (alreadyKnown) return;
     const today = new Date().toLocaleDateString('en-IN');
-    const newFact = { date: today, type, observation };
+    const newFact = { date: today, type, observation: normalized };
     dispatch({ type: 'ADD_AI_MEMORY', payload: newFact });
     const { proxyUrl, connected } = state.sheetsConfig;
     const email = state.user?.email;
     if (connected && proxyUrl && email) {
-      await writeMemory(proxyUrl, email, type, observation).catch(() => {});
+      await writeMemory(proxyUrl, email, type, normalized).catch(() => {});
     }
-  }, [state.sheetsConfig, state.user]);
+  }, [state.sheetsConfig, state.user, state.aiMemory]);
 
   // ─── UPDATE DYNAMIC THEME ──────────────────────────────────────────────────
   const updateTheme = useCallback(async (newTheme) => {
     dispatch({ type: 'SET_CONFIG', payload: { theme: newTheme } });
+    const userId = getStableUserId(state.user);
+    if (userId) {
+      const { setStoredTheme } = await import('../services/themeEngine');
+      setStoredTheme(userId, newTheme);
+    }
     const { proxyUrl, connected } = state.sheetsConfig;
     const email = state.user?.email;
     if (connected && proxyUrl && email) {
@@ -558,6 +590,44 @@ export function AppProvider({ children }) {
       await upsertConfig(proxyUrl, email, 'ThemeJSON', JSON.stringify(newTheme)).catch(() => {});
     }
   }, [state.sheetsConfig, state.user]);
+
+  const completeOnboarding = useCallback(async (profile) => {
+    const { proxyUrl } = state.sheetsConfig;
+    const email = state.user?.email;
+    if (!proxyUrl || !email) throw new Error('User account is not connected.');
+    const result = await proxyCompleteOnboarding(proxyUrl, email, profile);
+    if (!result?.success) throw new Error(result?.error || 'Could not save onboarding.');
+    dispatch({ type: 'SET_ONBOARDED', payload: result.profile || profile });
+    dispatch({ type: 'SET_CONFIG', payload: { name: profile.name || '', theme: profile.theme } });
+    const userId = getStableUserId(state.user);
+    if (userId && profile.theme) {
+      const { setStoredTheme, applyDynamicTheme } = await import('../services/themeEngine');
+      setStoredTheme(userId, profile.theme);
+      applyDynamicTheme(profile.theme);
+    }
+    return result;
+  }, [state.sheetsConfig, state.user]);
+
+  const saveSettings = useCallback(async (values) => {
+    const { proxyUrl } = state.sheetsConfig;
+    const email = state.user?.email;
+    if (!proxyUrl || !email) throw new Error('User account is not connected.');
+    const result = await proxySaveConfig(proxyUrl, email, values);
+    if (!result?.success) throw new Error(result?.error || 'Could not save settings.');
+    const configUpdate = {};
+    if (Object.prototype.hasOwnProperty.call(values, 'Name')) configUpdate.name = values.Name;
+    if (Object.prototype.hasOwnProperty.call(values, 'Salary')) configUpdate.salary = Number(values.Salary) || 0;
+    if (Object.prototype.hasOwnProperty.call(values, 'HomeIncome')) configUpdate.homeIncome = Number(values.HomeIncome) || 0;
+    const budgetEntries = Object.entries(values).filter(([key]) => key.startsWith('Budget:'));
+    if (budgetEntries.length > 0) {
+      configUpdate.budgets = {
+        ...state.config.budgets,
+        ...Object.fromEntries(budgetEntries.map(([key, value]) => [key.replace('Budget:', ''), Number(value) || 0])),
+      };
+    }
+    dispatch({ type: 'SET_CONFIG', payload: configUpdate });
+    return result;
+  }, [state.sheetsConfig, state.user, state.config.budgets]);
 
   // ─── COMPUTED VALUES ─────────────────────────────────────────────────────────
   const currentMonth = state.config.activeMonth;
@@ -588,22 +658,20 @@ export function AppProvider({ children }) {
 
   // Compute financial health score (must be after `computed` is defined)
   useEffect(() => {
-    if (computed.totalIncome > 0) {
-      const savingsScore = Math.min((parseFloat(computed.savingsRate) / 30) * 40, 40);
-      const budgetScore = Object.entries(state.config.budgets).filter(([cat, budget]) => {
-        return budget === 0 || (computed.categorySpend[cat] || 0) <= budget;
-      }).length / Object.keys(state.config.budgets).length * 30;
-      const streakScore = Math.min((state.streaks?.logging || 0) * 2, 20);
-      const goalScore = state.savingsGoals.filter(g => g.saved > 0).length > 0 ? 10 : 0;
-      const score = Math.round(savingsScore + budgetScore + streakScore + goalScore);
-      if (score !== state.financialHealthScore) {
-        dispatch({ type: 'SET_HEALTH_SCORE', payload: score });
-      }
-    }
-  }, [state.tracker, state.income, state.config.budgets, state.streaks, state.savingsGoals, state.financialHealthScore]);
+    const score = calculateFinancialHealth({
+      totalIncome: computed.totalIncome,
+      savingsRate: computed.savingsRate,
+      categorySpend: computed.categorySpend,
+      budgets: state.config.budgets,
+      goals: state.savingsGoals,
+      hasTransactions: state.tracker.length > 0,
+      hasIncomeEntries: state.income.length > 0,
+    });
+    if (score !== state.financialHealthScore) dispatch({ type: 'SET_HEALTH_SCORE', payload: score });
+  }, [computed.totalIncome, computed.savingsRate, computed.categorySpend, state.tracker.length, state.income.length, state.config.budgets, state.savingsGoals, state.financialHealthScore]);
 
   return (
-    <AppContext.Provider value={{ state, dispatch, computed, addExpense, deleteExpense, addNewCategory, syncFromSheets, addIncome, addGoal, updateGoal, updateBill, addMemoryFact, updateTheme }}>
+    <AppContext.Provider value={{ state, dispatch, computed, addExpense, deleteExpense, addNewCategory, syncFromSheets, addIncome, addGoal, updateGoal, updateBill, addMemoryFact, updateTheme, completeOnboarding, saveSettings }}>
       {children}
     </AppContext.Provider>
   );

@@ -14,10 +14,10 @@ const QUICK_PROMPTS = [
 
 export default function AIChat() {
   const { state, computed, addMemoryFact } = useApp();
-  const [messages, setMessages] = useState([
+  const [messages, setMessages] = useState(() => [
     {
       role: 'ai',
-      text: `Hey Shreyansh! 👋 I have full access to your financial data. Ask me anything — your spending, goals, investments, or what's coming up this month.`,
+      text: `Hi${state.config.name ? ` ${state.config.name}` : ''}! Ask me about your spending, goals, investments, or upcoming bills.`,
     },
   ]);
   const [input, setInput] = useState('');
@@ -64,10 +64,14 @@ export default function AIChat() {
 
     const memories = aiMemory.slice(-15).map(m => `- ${m.date || ''} [${m.type}]: ${m.observation}`).join('\n');
 
-    return `You are Shreyansh's personal AI financial advisor inside his Financial OS app. You have complete access to all his financial data sheets. Be conversational, specific, and use actual numbers. Use emojis sparingly. Never give generic advice — always reference his specific data sheets.
+    const fixedExpenses = Object.entries(state.fixedExpenses || {})
+      .map(([name, value]) => `- ${name}: ${value.amount || 'variable'} (${value.category || 'uncategorized'})`)
+      .join('\n');
+
+    return `You are the authenticated user's personal AI financial advisor inside Financial OS. Use only the user data provided below and never invent personal details or financial records.
 
 PROFILE:
-Name: Shreyansh
+Name: ${config.name || 'Not provided'}
 Monthly Income: ₹${totalIncome.toLocaleString()} (Salary ₹${config.salary.toLocaleString()} + Home ₹${config.homeIncome.toLocaleString()})
 
 CURRENT MONTH (${config.activeMonth} ${config.activeYear}):
@@ -105,11 +109,11 @@ SIP Value: ₹${sipValue.toLocaleString()}
 Crypto: ₹${cryptoValue.toLocaleString()}
 Total: ₹${netWorth.toLocaleString()}
 
-WHAT I KNOW ABOUT SHREYANSH (AI Memory Sheet):
+AUTHENTICATED USER MEMORY:
 ${memories || 'Still learning — keep logging!'}
 
 FIXED EXPENSES:
-Rent ₹6000, Gym ₹1500, Adobe ₹1600, Apple Cloud ₹299, Google Cloud ₹199, Mobile ₹333, WiFi ₹233, SIP ₹2500, Emergency Fund ₹2000, Travel Fund ₹1500. Electricity is variable.
+${fixedExpenses || 'No fixed expenses configured.'}
 
 Answer the user's question with specific numbers and actionable insights. Keep responses concise (3-5 sentences usually). If asked for projections, do the math and show it.`;
   };

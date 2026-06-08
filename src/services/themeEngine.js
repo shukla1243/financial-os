@@ -3,6 +3,7 @@
  * Supports dynamic CSS injection and AI theme generation.
  */
 import { callAI } from './aiService';
+import { getThemeKey } from './userStorage';
 
 export const THEME_PRESETS = {
   cyberpunk: {
@@ -97,6 +98,19 @@ export const THEME_PRESETS = {
   }
 };
 
+export function personalizeTheme(theme, seed) {
+  const value = String(seed || 'financial-os');
+  let hash = 0;
+  for (let i = 0; i < value.length; i++) hash = ((hash << 5) - hash + value.charCodeAt(i)) | 0;
+  const hue = Math.abs(hash) % 360;
+  return {
+    ...theme,
+    primaryColor: `hsl(${hue}, 72%, 58%)`,
+    accentColor: `hsl(${(hue + 47) % 360}, 78%, 55%)`,
+    shadowIntensity: `hsla(${hue}, 72%, 45%, 0.16)`,
+  };
+}
+
 /**
  * Injects a stylesheet into the document head dynamically using theme properties.
  */
@@ -186,26 +200,28 @@ export function applyDynamicTheme(theme) {
 /**
  * Persist and retrieve theme configuration per email
  */
-export function getStoredTheme(email) {
-  if (!email) return THEME_PRESETS.cyberpunk;
+export function getStoredTheme(userId) {
+  const key = getThemeKey(userId);
+  if (!key) return THEME_PRESETS.cyberpunk;
   try {
-    const val = localStorage.getItem(`theme_${email.toLowerCase()}`);
+    const val = localStorage.getItem(key);
     return val ? JSON.parse(val) : THEME_PRESETS.cyberpunk;
   } catch (e) {
     return THEME_PRESETS.cyberpunk;
   }
 }
 
-export function setStoredTheme(email, themeObj) {
-  if (!email) return;
+export function setStoredTheme(userId, themeObj) {
+  const key = getThemeKey(userId);
+  if (!key) return;
   try {
-    localStorage.setItem(`theme_${email.toLowerCase()}`, JSON.stringify(themeObj));
+    localStorage.setItem(key, JSON.stringify(themeObj));
   } catch (e) {}
 }
 
-export function clearStoredTheme(email) {
-  if (!email) return;
-  localStorage.removeItem(`theme_${email.toLowerCase()}`);
+export function clearStoredTheme(userId) {
+  const key = getThemeKey(userId);
+  if (key) localStorage.removeItem(key);
 }
 
 /**
@@ -251,4 +267,3 @@ Respond ONLY with a JSON object matching this structure (no markdown, no backtic
     return null;
   }
 }
-

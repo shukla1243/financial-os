@@ -1,5 +1,5 @@
 {
-  "name": "shreyansh-financial-os",
+  "name": "financial-os",
   "version": "1.0.0",
   "private": true,
   "dependencies": {
@@ -19,7 +19,8 @@
   },
   "scripts": {
     "start": "react-scripts start",
-    "build": "react-scripts build"
+    "build": "react-scripts build",
+    "test": "react-scripts test"
   },
   "browserslist": {
     "production": [
