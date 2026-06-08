@@ -28,7 +28,7 @@ export default function Header({ onLogout }) {
   const unreadNotifs = (state.notifications || []).filter(n => !n.read);
 
   return (
-    <div style={{ height: '56px', background: 'var(--bg-sidebar, var(--bg-sidebar))', borderBottom: '1px solid var(--border-color, var(--border-color))', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px', position: 'sticky', top: 0, zIndex: 50 }}>
+    <div className="main-header" style={{ height: '56px', background: 'var(--bg-sidebar, var(--bg-sidebar))', borderBottom: '1px solid var(--border-color, var(--border-color))', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px', position: 'sticky', top: 0, zIndex: 50 }}>
       {/* Left: month indicator */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
         <div style={{ fontFamily: 'Orbitron, monospace', fontSize: '11px', color: 'var(--text-muted)' }}>

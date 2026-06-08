@@ -7,6 +7,48 @@ import { getThemeKey } from './userStorage';
 import { extractJsonObject } from './aiJson';
 
 export const THEME_PRESETS = {
+  shadowMonarch: {
+    themeName: 'Shadow Monarch', layout: 'left-sidebar', cursor: 'terminal', decorations: 'shadow-particles',
+    borderStyle: 'solid', bgMain: '#05030c', bgCard: 'rgba(18, 10, 37, 0.72)', bgSidebar: 'rgba(7, 4, 18, 0.96)',
+    borderColor: 'rgba(168, 85, 247, 0.25)', primaryColor: '#a855f7', accentColor: '#7c3aed',
+    textMain: '#f5f3ff', textMuted: '#8b82a8', fontFamily: "'Orbitron', 'Inter', sans-serif",
+    cardRadius: '14px', shadowIntensity: 'rgba(126, 34, 206, 0.26)',
+  },
+  tokyoNeon: {
+    themeName: 'Tokyo Neon', layout: 'left-sidebar', cursor: 'precision', decorations: 'neon-city',
+    borderStyle: 'solid', bgMain: '#03040b', bgCard: 'rgba(8, 18, 35, 0.72)', bgSidebar: 'rgba(3, 8, 20, 0.96)',
+    borderColor: 'rgba(34, 211, 238, 0.24)', primaryColor: '#22d3ee', accentColor: '#f472b6',
+    textMain: '#ecfeff', textMuted: '#71869b', fontFamily: "'Orbitron', 'Inter', sans-serif",
+    cardRadius: '10px', shadowIntensity: 'rgba(34, 211, 238, 0.2)',
+  },
+  crimsonAkatsuki: {
+    themeName: 'Crimson Akatsuki', layout: 'left-sidebar', cursor: 'precision', decorations: 'crimson-clouds',
+    borderStyle: 'solid', bgMain: '#080204', bgCard: 'rgba(35, 7, 12, 0.74)', bgSidebar: 'rgba(18, 3, 7, 0.96)',
+    borderColor: 'rgba(239, 68, 68, 0.24)', primaryColor: '#ef4444', accentColor: '#fb7185',
+    textMain: '#fff1f2', textMuted: '#a4777d', fontFamily: "'Orbitron', 'Inter', sans-serif",
+    cardRadius: '8px', shadowIntensity: 'rgba(220, 38, 38, 0.22)',
+  },
+  oceanDragon: {
+    themeName: 'Ocean Dragon', layout: 'left-sidebar', cursor: 'precision', decorations: 'water-ripples',
+    borderStyle: 'solid', bgMain: '#020b18', bgCard: 'rgba(5, 29, 53, 0.72)', bgSidebar: 'rgba(2, 15, 31, 0.96)',
+    borderColor: 'rgba(34, 211, 238, 0.23)', primaryColor: '#06b6d4', accentColor: '#38bdf8',
+    textMain: '#ecfeff', textMuted: '#6c8ca1', fontFamily: "'Orbitron', 'Inter', sans-serif",
+    cardRadius: '16px', shadowIntensity: 'rgba(6, 182, 212, 0.22)',
+  },
+  sakuraDream: {
+    themeName: 'Sakura Dream', layout: 'left-sidebar', cursor: 'sakura', decorations: 'falling-sakura',
+    borderStyle: 'solid', bgMain: '#160811', bgCard: 'rgba(48, 16, 36, 0.72)', bgSidebar: 'rgba(28, 8, 20, 0.96)',
+    borderColor: 'rgba(244, 114, 182, 0.25)', primaryColor: '#f472b6', accentColor: '#fda4af',
+    textMain: '#fff1f5', textMuted: '#be91a7', fontFamily: "'Outfit', 'Inter', sans-serif",
+    cardRadius: '20px', shadowIntensity: 'rgba(244, 114, 182, 0.2)',
+  },
+  cyberHunter: {
+    themeName: 'Cyber Hunter', layout: 'left-sidebar', cursor: 'terminal', decorations: 'hud-grid',
+    borderStyle: 'solid', bgMain: '#01070d', bgCard: 'rgba(3, 24, 39, 0.76)', bgSidebar: 'rgba(1, 13, 24, 0.97)',
+    borderColor: 'rgba(14, 165, 233, 0.25)', primaryColor: '#0ea5e9', accentColor: '#22d3ee',
+    textMain: '#f0f9ff', textMuted: '#68889c', fontFamily: "'Orbitron', 'Inter', sans-serif",
+    cardRadius: '4px', shadowIntensity: 'rgba(14, 165, 233, 0.22)',
+  },
   cyberpunk: {
     themeName: 'Cyberpunk Neon',
     layout: 'left-sidebar',
@@ -116,7 +158,7 @@ export function normalizeTheme(theme, fallback = THEME_PRESETS.freelancer) {
   if (!theme || typeof theme !== 'object') return { ...fallback };
   const allowedLayouts = ['left-sidebar', 'right-sidebar', 'topbar'];
   const allowedCursors = ['chalk', 'terminal', 'sakura', 'precision', 'normal'];
-  const allowedDecorations = ['scanlines', 'blueprint-grid', 'falling-sakura', 'chalkboard-dust', 'none'];
+  const allowedDecorations = ['scanlines', 'blueprint-grid', 'falling-sakura', 'chalkboard-dust', 'shadow-particles', 'neon-city', 'crimson-clouds', 'water-ripples', 'hud-grid', 'none'];
   return {
     ...fallback,
     ...theme,

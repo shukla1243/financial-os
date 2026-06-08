@@ -121,6 +121,14 @@ function ThemeEffects() {
   const theme = state.config?.theme;
   const decorations = theme?.decorations || 'none';
 
+  if (['shadow-particles', 'neon-city', 'crimson-clouds', 'water-ripples', 'hud-grid'].includes(decorations)) {
+    return (
+      <div className={`theme-atmosphere theme-atmosphere--${decorations}`} aria-hidden="true">
+        <span /><span /><span /><span /><span /><span />
+      </div>
+    );
+  }
+
   if (decorations === 'scanlines') {
     return (
       <div className="crt-scanlines" style={{
@@ -291,11 +299,11 @@ function AppShell() {
   }
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg-main)', flexDirection: layout === 'right-sidebar' ? 'row-reverse' : 'row' }}>
+    <div className={`app-shell app-shell--${layout}`} style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg-main)', flexDirection: layout === 'right-sidebar' ? 'row-reverse' : 'row' }}>
       {showSidebar && <Sidebar />}
-      <div style={mainContainerStyle}>
+      <div className="app-main-shell" style={mainContainerStyle}>
         {layout === 'topbar' ? <Topbar /> : <Header onLogout={handleLogout} />}
-        <main style={{ flex: 1, padding: '24px', maxWidth: '1400px', width: '100%', margin: '0 auto', paddingTop: '24px' }}>
+        <main className="app-content" style={{ flex: 1, padding: '24px', maxWidth: '1500px', width: '100%', margin: '0 auto', paddingTop: '24px' }}>
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/logger" element={<AILogger />} />

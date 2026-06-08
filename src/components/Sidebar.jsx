@@ -66,7 +66,7 @@ export default function Sidebar() {
   };
 
   return (
-    <div style={{
+    <div className={`main-sidebar ${open ? 'main-sidebar--open' : 'main-sidebar--closed'}`} style={{
       position: 'fixed', left: 0, top: 0, bottom: 0, zIndex: 100,
       width: open ? '220px' : '56px',
       background: 'var(--bg-sidebar, var(--bg-sidebar))', borderRight: '1px solid var(--border-color, var(--border-color))',

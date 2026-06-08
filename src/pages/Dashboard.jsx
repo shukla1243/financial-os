@@ -1,60 +1,23 @@
-import React, { useState, useEffect } from 'react';
-import { useApp } from '../context/AppContext';
-import LogoutButton from '../components/LogoutButton';
-import { TrendingUp, TrendingDown, DollarSign, Shield, AlertTriangle, CheckCircle, Plus, ArrowRight, Zap } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { AlertTriangle, Bot, DollarSign, Flame, Plus, Shield, Sparkles, Target, TrendingDown, TrendingUp, Zap } from 'lucide-react';
+import { useApp } from '../context/AppContext';
 import { COINGECKO_MAPPING, fetchCoinGeckoPrices } from '../services/walletService';
+import { ActionButton, AnimePanel, ProgressLine, RankBadge, SectionHeading, StatPanel } from '../components/AnimeUI';
 
-const CAT_ICONS = { Housing:'🏠', Food:'🍱', Health:'💪', Telecom:'📡', Subscriptions:'📱', Transport:'⛽', Savings:'💾', Other:'📦' };
-const CAT_COLORS = { Housing:'#7c3aed', Food:'#f472b6', Health:'#10b981', Telecom:'#06b6d4', Subscriptions:'#fbbf24', Transport:'#f59e0b', Savings:'#10b981', Other:'var(--text-muted)' };
+const CAT_COLORS = { Housing:'#a855f7', Food:'#f472b6', Health:'#10b981', Telecom:'#22d3ee', Subscriptions:'#fbbf24', Transport:'#f59e0b', Savings:'#10b981', Other:'#64748b' };
 
-const S = {
-  card: { background:'var(--bg-card)', border:'1px solid var(--border-color)', borderRadius:'var(--card-radius)', padding:'20px' },
-  label: { fontSize:'10px', color:'var(--text-muted)', letterSpacing:'1.5px', fontWeight:600, marginBottom:'6px' },
-  val: { fontFamily:'Orbitron, monospace', fontWeight:700, fontSize:'22px' },
-  row: { display:'flex', alignItems:'center', justifyContent:'space-between' },
-  grid2: { display:'grid', gridTemplateColumns:'1fr 1fr', gap:'var(--grid-gap, 16px)', marginBottom:'20px' },
-  grid4: { display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:'var(--grid-gap, 12px)', marginBottom:'20px' },
-};
-
-function KPICard({ title, value, sub, color, icon: Icon, topColor, delay = 0 }) {
+function BudgetRow({ name, spent, budget, index }) {
+  const percent = budget > 0 ? Math.min((spent / budget) * 100, 100) : 0;
+  const over = budget > 0 && spent > budget;
+  const color = over ? '#ef4444' : percent >= 80 ? '#f59e0b' : CAT_COLORS[name] || 'var(--primary-color)';
   return (
-    <div style={{ ...S.card, borderTop:`2px solid ${topColor || color}`, animation:`scaleIn 0.4s ease-out both`, animationDelay:`${delay}s` }}>
-      <div style={{ ...S.row, marginBottom:'12px' }}>
-        <div>
-          <div style={S.label}>{title}</div>
-          <div style={{ ...S.val, color, marginTop:'4px' }}>{value}</div>
-        </div>
-        <div style={{ padding:'10px', borderRadius:'10px', background:`${color}15` }}>
-          <Icon size={20} color={color} />
-        </div>
+    <div className="budget-row" style={{ '--entry-delay': `${index * 0.05}s` }}>
+      <div className="budget-row__meta">
+        <div><span className="budget-row__dot" style={{ background: color }} />{name}{over && <span className="danger-chip">LIMIT BREAK</span>}</div>
+        <span>₹{spent.toLocaleString()} <small>/ ₹{budget.toLocaleString()}</small></span>
       </div>
-      <div style={{ fontSize:'12px', color:'var(--text-muted)' }}>{sub}</div>
-    </div>
-  );
-}
-
-function CategoryBar({ name, spent, budget, color }) {
-  const pct = budget > 0 ? Math.min((spent/budget)*100, 100) : 0;
-  const over = spent > budget && budget > 0;
-  const barColor = over ? '#ef4444' : pct >= 80 ? '#f59e0b' : color;
-  return (
-    <div style={{ marginBottom:'16px' }}>
-      <div style={{ ...S.row, marginBottom:'6px' }}>
-        <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
-          <span style={{ fontSize:'15px' }}>{CAT_ICONS[name] || '📦'}</span>
-          <span style={{ fontSize:'13px', fontWeight:500, color:'var(--text-main)' }}>{name}</span>
-          {over && <span style={{ fontSize:'9px', padding:'2px 6px', borderRadius:'10px', background:'#ef444420', color:'#ef4444', fontWeight:700 }}>OVER</span>}
-          {pct >= 100 && !over && <span style={{ fontSize:'9px', padding:'2px 6px', borderRadius:'10px', background:'#10b98120', color:'#10b981', fontWeight:700 }}>✓</span>}
-        </div>
-        <div style={{ textAlign:'right' }}>
-          <span style={{ fontFamily:'Orbitron, monospace', fontSize:'13px', color: over ? '#ef4444' : 'var(--text-main)' }}>₹{spent.toLocaleString()}</span>
-          <span style={{ fontSize:'11px', color:'var(--text-muted)' }}> / ₹{budget.toLocaleString()}</span>
-        </div>
-      </div>
-      <div style={{ height:'6px', background:'var(--border-color, var(--border-color))', borderRadius:'4px', overflow:'hidden' }}>
-        <div style={{ height:'100%', width:`${pct}%`, background:barColor, borderRadius:'4px', transition:'width 1.5s cubic-bezier(0.34, 1.56, 0.64, 1)' }} />
-      </div>
+      <ProgressLine value={percent} color={color} />
     </div>
   );
 }
@@ -64,205 +27,119 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const { totalIncome, totalExpenses, buffer, savingsRate, categorySpend, extraIncome } = computed;
   const { config, savingsGoals, tracker, aiInsights, financialHealthScore, level, xp } = state;
-  const today = new Date();
-  const daysInMonth = new Date(today.getFullYear(), today.getMonth()+1, 0).getDate();
-  const daysLeft = daysInMonth - today.getDate();
-  const dailyBudget = daysLeft > 0 ? Math.round(buffer / daysLeft) : 0;
-
   const [cryptoPrices, setCryptoPrices] = useState({});
+  const today = new Date();
+  const daysLeft = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate() - today.getDate();
+  const dailyBudget = daysLeft > 0 ? Math.round(buffer / daysLeft) : 0;
+  const activeTransactions = tracker.filter(t => t.month === config.activeMonth && String(t.year) === String(config.activeYear));
+  const xpProgress = ((xp || 0) % 500) / 5;
 
   useEffect(() => {
-    const cryptoItems = (state.investments || []).filter(i => (i.Type || i.type) === 'Crypto');
-    const uniqueGeckoIds = cryptoItems.map(i => {
-      const coinSym = (i.Fund_Coin || i.fund_coin || '').toLowerCase();
-      return COINGECKO_MAPPING[coinSym] || coinSym;
+    const ids = (state.investments || []).filter(i => (i.Type || i.type) === 'Crypto').map(i => {
+      const symbol = (i.Fund_Coin || i.fund_coin || '').toLowerCase();
+      return COINGECKO_MAPPING[symbol] || symbol;
     }).filter(Boolean);
-
-    fetchCoinGeckoPrices(uniqueGeckoIds)
-      .then(prices => {
-        if (prices) setCryptoPrices(prev => ({ ...prev, ...prices }));
-      })
-      .catch(e => console.warn('CoinGecko fallback', e));
+    fetchCoinGeckoPrices(ids).then(prices => prices && setCryptoPrices(prices)).catch(() => {});
   }, [state.investments]);
 
-  const getCryptoVal = (i) => {
-    const coinSym = (i.Fund_Coin || i.fund_coin || '').toLowerCase();
-    const coinId = COINGECKO_MAPPING[coinSym] || coinSym;
-    const price = cryptoPrices[coinId]?.inr || parseFloat(i.CurrentValue || i.currentValue) || 0;
-    return (parseFloat(i.Units || i.units) || 0) * price;
-  };
-
-  const sipValue = (state.investments || [])
-    .filter(i => (i.Type || i.type) === 'SIP')
-    .reduce((s, i) => s + (parseFloat(i.CurrentValue || i.currentValue) || 0), 0);
-
-  const cryptoValue = (state.investments || [])
-    .filter(i => (i.Type || i.type) === 'Crypto')
-    .reduce((s, i) => s + getCryptoVal(i), 0);
-
+  const sipValue = (state.investments || []).filter(i => (i.Type || i.type) === 'SIP').reduce((sum, i) => sum + (parseFloat(i.CurrentValue || i.currentValue) || 0), 0);
+  const cryptoValue = (state.investments || []).filter(i => (i.Type || i.type) === 'Crypto').reduce((sum, i) => {
+    const symbol = (i.Fund_Coin || i.fund_coin || '').toLowerCase();
+    const price = cryptoPrices[COINGECKO_MAPPING[symbol] || symbol]?.inr || parseFloat(i.CurrentValue || i.currentValue) || 0;
+    return sum + (parseFloat(i.Units || i.units) || 0) * price;
+  }, 0);
   const netWorth = buffer + sipValue + cryptoValue;
-  const overBudget = Object.entries(config.budgets).filter(([cat,budget])=>(categorySpend[cat]||0)>budget && budget>0);
-  const newSections = state.newSectionNotifications || [];
-  
-  // Health score count-up animation
-  const [displayScore, setDisplayScore] = useState(0);
-  useEffect(() => {
-    const target = financialHealthScore || 0;
-    if (target === 0) return;
-    let current = 0;
-    const step = target / 60;
-    const timer = setInterval(() => {
-      current = Math.min(current + step, target);
-      setDisplayScore(Math.round(current));
-      if (current >= target) clearInterval(timer);
-    }, 25);
-    return () => clearInterval(timer);
-  }, [financialHealthScore]);
+  const overBudget = Object.entries(config.budgets || {}).filter(([cat, budget]) => (categorySpend[cat] || 0) > budget && budget > 0);
+  const score = financialHealthScore ?? 0;
+  const achievementCount = [parseFloat(savingsRate) >= 20, activeTransactions.length >= 5, score >= 70, savingsGoals.length > 0].filter(Boolean).length;
 
   return (
-    <div style={{ animation:'slideUp 0.35s ease-out both' }}>
-      {/* Header */}
-      <div style={{ marginBottom:'24px' }}>
-        <h1 style={{ fontFamily:'Orbitron, monospace', fontSize:'22px', fontWeight:900, background:'linear-gradient(135deg, #a78bfa, #06b6d4, #f472b6)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', marginBottom:'4px' }}>
-          {config.name?.toUpperCase() || 'FINANCIAL OS'}
-        </h1>
-        <div style={{ fontFamily:'monospace', fontSize:'11px', color:'#7c3aed80', letterSpacing:'2px' }}>お金の力で未来を切り拓け — Cut open the future with the power of money</div>
-      </div>
-
-      {/* New section notification */}
-      {newSections.length > 0 && (
-        <div style={{ ...S.card, borderLeft:'4px solid #7c3aed', marginBottom:'20px', display:'flex', alignItems:'center', gap:'12px' }}>
-          <Zap size={20} color="#a78bfa" />
-          <div>
-            <div style={{ fontSize:'12px', color:'#a78bfa', fontWeight:700, marginBottom:'2px' }}>AI BUILT SOMETHING NEW</div>
-            <div style={{ fontSize:'12px', color:'var(--text-muted)' }}>{newSections[0]?.message}</div>
+    <div className="anime-page dashboard-page">
+      <section className="command-hero">
+        <div className="command-hero__beam" />
+        <div className="command-hero__content">
+          <div className="hero-kicker"><Zap size={13} /> LIVE FINANCIAL COMMAND SYSTEM</div>
+          <h1>{config.name?.toUpperCase() || 'FINANCIAL OS'}</h1>
+          <p>Your next chapter is being written in real time. Track the mission, strengthen the buffer, and level up your money system.</p>
+          <div className="hero-actions">
+            <ActionButton onClick={() => navigate('/logger')}>Log new expense</ActionButton>
+            <ActionButton secondary onClick={() => navigate('/chat')}>Ask companion AI</ActionButton>
           </div>
         </div>
-      )}
+        <div className="command-hero__profile">
+          <RankBadge score={score} />
+          <div className="profile-level">
+            <div><span>PLAYER LEVEL</span><strong>LV. {level || 1}</strong></div>
+            <span>{xp || 0} XP</span>
+          </div>
+          <ProgressLine value={xpProgress} color="linear-gradient(90deg,var(--primary-color),var(--accent-color))" />
+          <div className="profile-mini-grid">
+            <div><Flame size={15} /><strong>{activeTransactions.length}</strong><span>logs this month</span></div>
+            <div><Sparkles size={15} /><strong>{achievementCount}/4</strong><span>missions cleared</span></div>
+          </div>
+        </div>
+      </section>
 
-      {/* Budget alerts */}
+      {(state.newSectionNotifications || []).length > 0 && (
+        <div className="system-notice"><Bot size={17} /><div><strong>NEW SYSTEM MODULE UNLOCKED</strong><span>{state.newSectionNotifications[0]?.message}</span></div></div>
+      )}
       {overBudget.length > 0 && (
-        <div style={{ padding:'12px 16px', borderRadius:'10px', background:'#ef444410', border:'1px solid #ef444430', marginBottom:'20px', display:'flex', alignItems:'center', gap:'8px' }}>
-          <AlertTriangle size={16} color="#ef4444" />
-          <span style={{ fontSize:'12px', color:'#ef4444' }}>
-            Over budget: {overBudget.map(([cat])=>cat).join(', ')}
-          </span>
-        </div>
+        <div className="system-notice system-notice--danger"><AlertTriangle size={17} /><div><strong>BUDGET ALERT</strong><span>{overBudget.map(([cat]) => cat).join(', ')} crossed the current limit.</span></div></div>
       )}
 
-      {/* KPI Cards */}
-      <div style={S.grid2}>
-        <KPICard title="TOTAL INCOME" value={`₹${totalIncome.toLocaleString()}`} sub={`Base ₹${(config.salary+config.homeIncome).toLocaleString()}${extraIncome>0?` + ₹${extraIncome.toLocaleString()} extra`:''}`} color="#06b6d4" icon={DollarSign} topColor="#06b6d4" delay={0} />
-        <KPICard title="TOTAL EXPENSES" value={`₹${totalExpenses.toLocaleString()}`} sub={tracker.filter(t=>t.month===config.activeMonth && String(t.year)===String(config.activeYear)).length > 0 ? `${tracker.filter(t=>t.month===config.activeMonth && String(t.year)===String(config.activeYear)).length} transactions` : 'No expenses logged yet'} color="#f472b6" icon={TrendingDown} topColor="#f472b6" delay={0.08} />
-        <KPICard title="SAVINGS TARGET" value={`₹${(categorySpend['Savings']||0).toLocaleString()}`} sub={config.budgets['Savings'] ? `Target: ₹${config.budgets['Savings'].toLocaleString()} / month` : 'No savings target configured'} color="#10b981" icon={Shield} topColor="#10b981" delay={0.16} />
-        <KPICard title="BUFFER" value={`₹${buffer.toLocaleString()}`} sub={`₹${dailyBudget.toLocaleString()}/day left • ${daysLeft} days remaining`} color="#fbbf24" icon={TrendingUp} topColor="#fbbf24" delay={0.24} />
+      <div className="stat-grid">
+        <StatPanel label="Income power" value={`₹${totalIncome.toLocaleString()}`} sub={`Base ₹${(config.salary + config.homeIncome).toLocaleString()}${extraIncome > 0 ? ` + ₹${extraIncome.toLocaleString()} extra` : ''}`} icon={DollarSign} tone="cyan" />
+        <StatPanel label="Expense damage" value={`₹${totalExpenses.toLocaleString()}`} sub={`${activeTransactions.length} transactions this chapter`} icon={TrendingDown} tone="pink" delay={0.06} />
+        <StatPanel label="Cash buffer" value={`₹${buffer.toLocaleString()}`} sub={`₹${dailyBudget.toLocaleString()} daily power · ${daysLeft} days left`} icon={Shield} tone="gold" delay={0.12} />
+        <StatPanel label="Savings rate" value={`${savingsRate}%`} sub={parseFloat(savingsRate) >= 20 ? 'Target zone secured' : 'Build toward the 20% zone'} icon={TrendingUp} tone="green" delay={0.18} />
       </div>
 
-      {/* Main content: budget + sidebar */}
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 300px', gap:'16px' }}>
-        {/* Budget Status */}
-        <div style={{...S.card, minWidth:0}}>
-          <div style={{ ...S.row, marginBottom:'20px' }}>
-            <div>
-              <div style={S.label}>BUDGET STATUS</div>
-              <div style={{ fontFamily:'Orbitron, monospace', fontSize:'14px', color:'var(--text-main)' }}>{config.activeMonth} {config.activeYear}</div>
-            </div>
-            <button onClick={()=>navigate('/logger')}
-              style={{ padding:'8px 14px', borderRadius:'8px', border:'none', background:'linear-gradient(135deg,#7c3aed,#06b6d4)', color:'#fff', fontSize:'12px', fontWeight:600, cursor:'pointer', display:'flex', alignItems:'center', gap:'6px' }}>
-              <Plus size={14} /> Log Expense
-            </button>
+      <div className="dashboard-command-grid">
+        <AnimePanel className="budget-command">
+          <SectionHeading eyebrow={`${config.activeMonth} ${config.activeYear} · LIVE MISSION`} title="Budget Battle Map" note="Every category is a lane. Keep each one inside its power limit." action={<button className="icon-action" onClick={() => navigate('/logger')}><Plus size={16} /></button>} />
+          <div className="budget-list">
+            {Object.keys(config.budgets || {}).length === 0
+              ? <div className="empty-state"><Target size={26} /><strong>No budget missions yet</strong><span>Create categories in Settings to activate the map.</span></div>
+              : Object.entries(config.budgets).map(([cat, budget], index) => <BudgetRow key={cat} name={cat} budget={budget} spent={categorySpend[cat] || 0} index={index} />)}
           </div>
+        </AnimePanel>
 
-          {Object.keys(config.budgets).length === 0 ? (
-            <div style={{ textAlign:'center', padding:'32px', color:'#475569', fontSize:'13px' }}>No categories yet</div>
-          ) : (
-            Object.entries(config.budgets).map(([cat, budget], idx) => (
-              <div key={cat} style={{ animation:'slideInLeft 0.3s ease-out both', animationDelay:`${idx * 0.05}s` }}>
-                <CategoryBar name={cat} spent={categorySpend[cat]||0} budget={budget} color={CAT_COLORS[cat]||'#7c3aed'} />
-              </div>
-            ))
-          )}
-
-          <div style={{ marginTop:'16px', paddingTop:'16px', borderTop:'1px solid var(--border-color, var(--border-color))', ...S.row }}>
-            <span style={{ fontSize:'13px', color:'var(--text-muted)' }}>Overall Savings Rate</span>
-            <span style={{ fontFamily:'Orbitron, monospace', fontSize:'14px', color: parseFloat(savingsRate)>=20?'#10b981':'#f59e0b' }}>{savingsRate}%</span>
-          </div>
-        </div>
-
-        {/* Right sidebar widgets */}
-        <div style={{ display:'flex', flexDirection:'column', gap:'16px' }}>
-          {/* Net Worth */}
-          <div style={{ ...S.card, borderTop:'2px solid #7c3aed', animation:'borderGlow 3s ease-in-out infinite both' }}>
-            <div style={S.label}>NET WORTH</div>
-            <div style={{ fontFamily:'Orbitron, monospace', fontSize:'20px', fontWeight:700, color:'#a78bfa', marginBottom:'12px' }}>₹{netWorth.toLocaleString()}</div>
-            {[['💵 Cash Buffer', buffer, '#06b6d4'], ['📈 SIP Value', sipValue, '#10b981'], ['₿ Crypto', cryptoValue, '#fbbf24']].map(([label, val, color])=>(
-              <div key={label} style={{ ...S.row, marginBottom:'8px' }}>
-                <span style={{ fontSize:'12px', color:'var(--text-muted)' }}>{label}</span>
-                <span style={{ fontFamily:'Orbitron, monospace', fontSize:'12px', color }}>₹{val.toLocaleString()}</span>
-              </div>
-            ))}
-          </div>
-
-          {/* Health Score */}
-          <div style={{ ...S.card, borderTop:'2px solid #10b981', textAlign:'center' }}>
-            <div style={S.label}>FINANCIAL HEALTH</div>
-            <div style={{ fontFamily:'Orbitron, monospace', fontSize:'36px', fontWeight:900, color: financialHealthScore>=80?'#10b981':financialHealthScore>=60?'#f59e0b':'#ef4444', margin:'8px 0' }}>
-              {financialHealthScore === null ? 'N/A' : displayScore}<span style={{ fontSize:'16px', color:'var(--text-muted)' }}>{financialHealthScore === null ? '' : '/100'}</span>
-            </div>
-            <div style={{ height:'6px', background:'var(--border-color, var(--border-color))', borderRadius:'4px', overflow:'hidden' }}>
-              <div style={{ height:'100%', width:`${financialHealthScore || 0}%`, background:'linear-gradient(90deg, var(--primary-color), #10b981)', borderRadius:'4px' }} />
-            </div>
-          </div>
-
-          {/* AI Insight */}
-          {(aiInsights||[]).length > 0 && (
-            <div style={{ ...S.card, borderTop:'2px solid #f472b6' }}>
-              <div style={{ display:'flex', alignItems:'center', gap:'6px', marginBottom:'8px' }}>
-                <Zap size={14} color="#f472b6" />
-                <div style={{ fontSize:'10px', color:'#f472b6', letterSpacing:'1px', fontWeight:700 }}>AI INSIGHT</div>
-              </div>
-              <div style={{ fontSize:'12px', color:'var(--text-muted)', lineHeight:'1.6' }}>{aiInsights[0]}</div>
-            </div>
-          )}
-
-          {/* Savings Goals */}
-          {savingsGoals.length > 0 && (
-            <div style={{ ...S.card, borderTop:'2px solid #06b6d4' }}>
-              <div style={{ ...S.row, marginBottom:'12px' }}>
-                <div style={S.label}>SAVINGS GOALS</div>
-                <button onClick={()=>navigate('/goals')} style={{ fontSize:'11px', color:'#06b6d4', background:'transparent', border:'none', cursor:'pointer' }}>View all →</button>
-              </div>
-              {savingsGoals.slice(0,3).map(g=>{
-                const pct = g.target>0?Math.min(Math.round((g.saved/g.target)*100),100):0;
-                const color = g.color==='cyan'?'#06b6d4':g.color==='success'?'#10b981':g.color==='pink'?'#f472b6':g.color==='gold'?'#fbbf24':'#7c3aed';
-                return (
-                  <div key={g.id} style={{ marginBottom:'12px' }}>
-                    <div style={{ ...S.row, marginBottom:'5px' }}>
-                      <span style={{ fontSize:'12px', color:'var(--text-main)' }}>{g.icon} {g.name}</span>
-                      <span style={{ fontFamily:'Orbitron, monospace', fontSize:'11px', color }}>{pct}%</span>
-                    </div>
-                    <div style={{ height:'4px', background:'var(--border-color, var(--border-color))', borderRadius:'3px', overflow:'hidden' }}>
-                      <div style={{ height:'100%', width:`${pct}%`, background:color, borderRadius:'3px' }} />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {/* Quick actions */}
-          <div style={S.card}>
-            <div style={S.label}>QUICK ACTIONS</div>
-            {[['🤖 Log Expense', '/logger', 'var(--primary-color)'], ['📊 Analytics', '/analytics', 'var(--accent-color)'], ['💬 Ask AI', '/chat', '#f472b6']].map(([label, path, color])=>(
-              <button key={path} onClick={()=>navigate(path)}
-                style={{ width:'100%', padding:'10px 12px', borderRadius:'8px', border:`1px solid ${color.startsWith('var') ? color : color + '30'}`, background:`${color.startsWith('var') ? 'transparent' : color + '10'}`, color, fontSize:'12px', fontWeight:500, cursor:'pointer', marginBottom:'8px', textAlign:'left', display:'flex', alignItems:'center', gap:'8px', transition:'all 0.2s ease' }} onMouseEnter={e=>{e.currentTarget.style.transform='translateX(4px)';e.currentTarget.style.background=color.startsWith('var') ? 'rgba(255,255,255,0.05)' : `${color}20`}} onMouseLeave={e=>{e.currentTarget.style.transform='translateX(0)';e.currentTarget.style.background=color.startsWith('var') ? 'transparent' : `${color}10`}}>
-                {label}
-              </button>
-            ))}
-          </div>
+        <div className="command-side-stack">
+          <AnimePanel accent="primary" className="health-core">
+            <div className="health-core__orbit" style={{ background: `conic-gradient(var(--primary-color) ${score}%, var(--border-color) 0)` }}><div><strong>{score}</strong><span>/100</span></div></div>
+            <div><span className="panel-kicker">FINANCIAL HEALTH CORE</span><h3>{score >= 80 ? 'Elite condition' : score >= 60 ? 'System stable' : 'Recovery mission'}</h3><p>Your score updates from your real financial activity.</p></div>
+          </AnimePanel>
+          <AnimePanel accent="cyan">
+            <SectionHeading eyebrow="ASSET LOADOUT" title="Net Worth" />
+            <div className="net-worth-value">₹{netWorth.toLocaleString()}</div>
+            <div className="asset-list"><span>Cash buffer <strong>₹{buffer.toLocaleString()}</strong></span><span>SIP value <strong>₹{sipValue.toLocaleString()}</strong></span><span>Crypto <strong>₹{cryptoValue.toLocaleString()}</strong></span></div>
+          </AnimePanel>
+          <AnimePanel accent="pink">
+            <SectionHeading eyebrow="COMPANION SIGNAL" title="AI Insight" />
+            <p className="insight-copy">{aiInsights?.[0] || 'Log a few transactions and your companion AI will surface a tactical insight here.'}</p>
+          </AnimePanel>
         </div>
       </div>
-      <style>{`@keyframes slideUp { from { transform:translateY(20px); opacity:0; } to { transform:translateY(0); opacity:1; } }`}</style>
+
+      <div className="dashboard-lower-grid">
+        <AnimePanel>
+          <SectionHeading eyebrow="ACTIVE QUESTS" title="Savings Goals" action={<button className="text-action" onClick={() => navigate('/goals')}>Open quest log</button>} />
+          <div className="quest-grid">
+            {savingsGoals.length === 0 ? <div className="empty-state"><Target size={24} /><strong>No active quests</strong><span>Add a savings goal to begin.</span></div> : savingsGoals.slice(0, 4).map(goal => {
+              const percent = goal.target > 0 ? Math.min((goal.saved / goal.target) * 100, 100) : 0;
+              return <div className="quest-card" key={goal.id}><div><span>{goal.icon}</span><strong>{goal.name}</strong><em>{Math.round(percent)}%</em></div><ProgressLine value={percent} color="linear-gradient(90deg,var(--primary-color),var(--accent-color))" /></div>;
+            })}
+          </div>
+        </AnimePanel>
+        <AnimePanel accent="gold">
+          <SectionHeading eyebrow="ACHIEVEMENT BOARD" title="Current Streaks" />
+          <div className="achievement-list">
+            <div className={activeTransactions.length >= 5 ? 'is-cleared' : ''}><Flame /><span><strong>Active Logger</strong>Log 5 transactions this month</span></div>
+            <div className={parseFloat(savingsRate) >= 20 ? 'is-cleared' : ''}><Shield /><span><strong>Buffer Guardian</strong>Reach a 20% savings rate</span></div>
+            <div className={score >= 70 ? 'is-cleared' : ''}><Sparkles /><span><strong>System Ascension</strong>Reach 70 financial health</span></div>
+          </div>
+        </AnimePanel>
+      </div>
     </div>
   );
 }

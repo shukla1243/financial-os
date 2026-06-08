@@ -16,3 +16,9 @@ test('normalizes malformed generated themes to valid UI options', () => {
   expect(theme.layout).toBe(THEME_PRESETS.freelancer.layout);
   expect(theme.decorations).toBe(THEME_PRESETS.freelancer.decorations);
 });
+
+test('keeps built-in anime theme atmosphere options', () => {
+  const theme = normalizeTheme(THEME_PRESETS.oceanDragon);
+  expect(theme.themeName).toBe('Ocean Dragon');
+  expect(theme.decorations).toBe('water-ripples');
+});

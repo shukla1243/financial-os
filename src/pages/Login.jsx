@@ -33,13 +33,13 @@ export default function Login({ onLogin }) {
   };
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-main)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px', position: 'relative', overflow: 'hidden' }}>
+    <div className="login-launcher" style={{ minHeight: '100vh', background: 'var(--bg-main)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px', position: 'relative', overflow: 'hidden' }}>
       
       {/* Background effects */}
       <div style={{ position: 'absolute', top: '-20%', left: '-10%', width: '600px', height: '600px', borderRadius: '50%', background: 'radial-gradient(circle, #7c3aed08 0%, transparent 70%)', pointerEvents: 'none', animation: 'float 6s ease-in-out infinite' }} />
       <div style={{ position: 'absolute', bottom: '-20%', right: '-10%', width: '500px', height: '500px', borderRadius: '50%', background: 'radial-gradient(circle, #06b6d408 0%, transparent 70%)', pointerEvents: 'none', animation: 'float 8s ease-in-out infinite reverse' }} />
 
-      <div style={{ width: '100%', maxWidth: '420px', position: 'relative' }}>
+      <div className="login-launcher__content" style={{ width: '100%', maxWidth: '420px', position: 'relative' }}>
         
         {/* Logo */}
         <div style={{ textAlign: 'center', marginBottom: '40px' }}>

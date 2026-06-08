@@ -111,7 +111,7 @@ export default function Settings() {
   const scoreColor = score === null ? '#64748b' : score >= 80 ? '#10b981' : score >= 60 ? '#f59e0b' : '#ef4444';
 
   return (
-    <div style={{ maxWidth: '700px', width: '100%' }}>
+    <div className="settings-page anime-page" style={{ maxWidth: '900px', width: '100%' }}>
       <div style={{ marginBottom: '24px' }}>
         <h2 style={{ fontFamily: 'Orbitron, monospace', fontSize: '22px', fontWeight: 700, background: 'linear-gradient(135deg,#a78bfa,#06b6d4)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>SETTINGS</h2>
         <div style={{ fontFamily: 'monospace', fontSize: '11px', color: '#7c3aed80', letterSpacing: '2px' }}>設定パネル — Configure your Financial OS</div>
@@ -230,6 +230,22 @@ export default function Settings() {
                   {state.config.theme?.fontFamily?.split(',')[0]?.replace(/'/g, '') || 'Inter'}
                 </span>
               </div>
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: '10px', color: 'var(--text-muted)', letterSpacing: '1.5px', marginBottom: '10px' }}>ANIME THEME LOADOUTS</div>
+            <div className="theme-loadout-grid">
+              {['shadowMonarch', 'tokyoNeon', 'crimsonAkatsuki', 'oceanDragon', 'sakuraDream', 'cyberHunter'].map(key => {
+                const preset = THEME_PRESETS[key];
+                const active = state.config.theme?.themeName === preset.themeName;
+                return (
+                  <button key={key} type="button" onClick={() => updateTheme(preset)} className={`theme-loadout ${active ? 'theme-loadout--active' : ''}`} style={{ '--theme-primary': preset.primaryColor, '--theme-accent': preset.accentColor, '--theme-bg': preset.bgMain }}>
+                    <span className="theme-loadout__swatch" />
+                    <span><strong>{preset.themeName}</strong><small>{preset.decorations.replace('-', ' ')}</small></span>
+                    {active && <Check size={14} />}
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
