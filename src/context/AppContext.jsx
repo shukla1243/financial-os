@@ -19,6 +19,7 @@ import { runConsciousnessScan, readBlueprint } from '../services/consciousnessEn
 import { resolveAllInvestments } from '../services/walletService';
 import { clearLegacyStorage, getStableUserId, readUserState, writeUserState } from '../services/userStorage';
 import { calculateFinancialHealth } from '../services/financialHealth';
+import { isValidMemoryObservation } from '../services/memoryGuard';
 import { restoreAuthenticatedUser } from '../services/googleAuth';
 
 const AppContext = createContext();
@@ -626,7 +627,7 @@ export function AppProvider({ children }) {
   // ─── ADD AI MEMORY FACT ──────────────────────────────────────────────────────
   const addMemoryFact = useCallback(async (observation, type = 'user_profile') => {
     const normalized = String(observation || '').trim();
-    if (!normalized) return;
+    if (!isValidMemoryObservation(normalized)) return;
     const alreadyKnown = state.aiMemory.some(
       memory => String(memory.observation || '').trim().toLowerCase() === normalized.toLowerCase()
     );

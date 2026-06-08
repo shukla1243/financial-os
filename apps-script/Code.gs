@@ -784,7 +784,9 @@ function setBills(ssId, email, bills) {
 function getMemory(ssId, email) {
   try {
     const rows = readUserRows(ssId, 'AIMemory', email);
-    const data = rows.map(({ obj }) => ({ date: obj.Date, type: obj.Type, observation: obj.Observation }));
+    const data = rows
+      .map(({ obj }) => ({ date: obj.Date, type: obj.Type, observation: obj.Observation }))
+      .filter(memory => isValidMemoryObservation(memory.observation));
     return { success: true, data };
   } catch (err) {
     return { success: false, error: err.toString(), data: [] };
@@ -794,7 +796,9 @@ function getMemory(ssId, email) {
 function logMemory(ssId, email, mem) {
   try {
     const observation = String(mem?.observation || '').trim();
-    if (!observation || observation.length > 5000) return { success: false, error: 'Invalid memory payload.' };
+    if (!isValidMemoryObservation(observation) || observation.length > 5000) {
+      return { success: false, error: 'Invalid memory payload.' };
+    }
     const existing = readUserRows(ssId, 'AIMemory', email).some(
       row => String(row.obj.Observation || '').trim().toLowerCase() === observation.toLowerCase()
     );
@@ -805,6 +809,23 @@ function logMemory(ssId, email, mem) {
   } catch (err) {
     return { success: false, error: err.toString() };
   }
+}
+
+function isValidMemoryObservation(observation) {
+  const value = String(observation || '').trim().toLowerCase();
+  if (value.length < 3) return false;
+  const transientPatterns = [
+    'having trouble reaching ai services',
+    'your data remains safe',
+    'please try again shortly',
+    'something went wrong',
+    'too many requests',
+    'rate limit',
+    'temporarily unavailable',
+    'overloaded',
+    'ai is taking too long',
+  ];
+  return !transientPatterns.some(pattern => value.indexOf(pattern) !== -1);
 }
 
 function getBlueprint(ssId, email) {

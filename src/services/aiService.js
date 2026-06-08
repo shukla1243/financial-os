@@ -5,6 +5,7 @@
 import { PROXY_URL } from '../config';
 import { getCurrentUser } from './googleAuth';
 import { proxyAI } from './proxyService';
+import { isValidMemoryObservation } from './memoryGuard';
 
 const inFlightRequests = new Map();
 const AI_TIMEOUT_MS = 25000;
@@ -79,7 +80,7 @@ If they did not reveal any new personal profile facts (e.g. they just asked a fi
       key: apiKey
     });
     const result = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || 'NONE';
-    if (result.toUpperCase() === 'NONE' || result.includes('NONE') || result.length < 3) return null;
+    if (result.toUpperCase() === 'NONE' || result.includes('NONE') || !isValidMemoryObservation(result)) return null;
     return result;
   } catch (e) {
     return null;
