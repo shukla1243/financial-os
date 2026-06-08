@@ -6,15 +6,78 @@
  */
 import { callAI } from './aiService';
 
+const CANONICAL_CATEGORY_KEYWORDS = {
+  'Pet Care': ['pet', 'dog', 'cat', 'vet'],
+  Food: [
+    'food', 'tiffin', 'breakfast', 'lunch', 'dinner', 'meal', 'snack',
+    'restaurant', 'cafe', 'coffee', 'tea', 'grocery', 'groceries',
+    'swiggy', 'zomato',
+  ],
+  Transport: [
+    'transport', 'petrol', 'diesel', 'fuel', 'uber', 'ola', 'auto',
+    'taxi', 'cab', 'bus', 'train', 'metro', 'commute', 'parking', 'toll',
+  ],
+  Housing: [
+    'housing', 'rent', 'maintenance', 'electricity', 'water bill',
+    'gas bill', 'house', 'home',
+  ],
+  Health: [
+    'health', 'doctor', 'hospital', 'medicine', 'pharmacy', 'medical',
+    'clinic', 'gym',
+  ],
+  Telecom: [
+    'telecom', 'recharge', 'mobile bill', 'phone bill', 'internet',
+    'broadband', 'wifi',
+  ],
+  Subscriptions: ['subscription', 'netflix', 'spotify', 'youtube premium', 'prime'],
+  Shopping: ['shopping', 'amazon', 'flipkart', 'clothes', 'clothing', 'shoes'],
+  Entertainment: ['entertainment', 'movie', 'cinema', 'game', 'gaming', 'concert'],
+  Education: ['education', 'course', 'tuition', 'book', 'books', 'exam'],
+  Travel: ['travel', 'flight', 'hotel', 'trip', 'vacation'],
+};
+
+const normalizeText = (value) => String(value || '')
+  .toLowerCase()
+  .replace(/[^a-z0-9]+/g, ' ')
+  .trim();
+
+function includesKeyword(text, keyword) {
+  return ` ${text} `.includes(` ${normalizeText(keyword)} `);
+}
+
+function findExistingCategory(category, budgets) {
+  const normalizedCategory = normalizeText(category);
+  return Object.keys(budgets || {}).find(name => normalizeText(name) === normalizedCategory);
+}
+
+/**
+ * Infer a broad, reusable category from the expense context.
+ * Specific descriptions such as "tiffin" intentionally resolve to "Food".
+ */
+export function inferCanonicalCategory(expense) {
+  const explicitCategory = String(expense?.category || '').replace(/^NEW:/i, '').trim();
+  const context = normalizeText([
+    expense?.description,
+    expense?.note,
+    explicitCategory,
+  ].filter(Boolean).join(' '));
+
+  for (const [category, keywords] of Object.entries(CANONICAL_CATEGORY_KEYWORDS)) {
+    if (keywords.some(keyword => includesKeyword(context, keyword))) {
+      return category;
+    }
+  }
+
+  return explicitCategory || 'Other';
+}
+
 /**
  * Check if an AI-parsed expense category exists in current budgets.
  * Returns { known: true } or { known: false, suggestedCategory, suggestedBudget, icon, reason }
  */
 export function checkCategoryExists(category, budgets) {
-  const existing = Object.keys(budgets).map(k => k.toLowerCase());
-  if (existing.includes(category.toLowerCase())) {
-    // Find the correctly-cased key
-    const match = Object.keys(budgets).find(k => k.toLowerCase() === category.toLowerCase());
+  const match = findExistingCategory(category, budgets);
+  if (match) {
     return { known: true, normalizedCategory: match };
   }
   return { known: false };
@@ -167,6 +230,9 @@ IMPORTANT — NEW CATEGORY DETECTION:
 If an expense clearly does NOT fit any of the CURRENT CATEGORIES, set:
   "category": "NEW:<YourSuggestedCategoryName>"
 Only use NEW: prefix if the expense genuinely doesn't fit existing categories.
+Infer broad reusable categories from the transaction context, not just literal words.
+Examples: tiffin/lunch/restaurant -> Food, petrol/uber/metro -> Transport, medicine/doctor -> Health.
+Do not create overly specific categories such as Tiffin, Restaurant, Petrol, or Uber.
 
 PAYMENT MODE RULES (Expenses):
 - Subscriptions, SIP, recurring → Auto-debit
@@ -241,19 +307,25 @@ If multiple actions are requested in one sentence, return them in their respecti
 }
 
 /**
- * Parse AI response and detect if any expense has a NEW: category prefix.
- * Returns { regular: [], newCategory: expense | null }
+ * Normalize AI categories from the full expense context and separate categories
+ * that need to be created for this user.
  */
-export function parseExpensesForNewCategories(expenses) {
+export function parseExpensesForNewCategories(expenses, budgets = {}) {
   const regular = [];
   const newCategoryExpenses = [];
 
   expenses.forEach(exp => {
-    if (exp.category?.startsWith('NEW:')) {
-      const suggestedName = exp.category.replace('NEW:', '').trim();
-      newCategoryExpenses.push({ ...exp, suggestedCategoryName: suggestedName, category: suggestedName });
+    const canonicalCategory = inferCanonicalCategory(exp);
+    const existingCategory = findExistingCategory(canonicalCategory, budgets);
+
+    if (existingCategory) {
+      regular.push({ ...exp, category: existingCategory });
     } else {
-      regular.push(exp);
+      newCategoryExpenses.push({
+        ...exp,
+        category: canonicalCategory,
+        suggestedCategoryName: canonicalCategory,
+      });
     }
   });
 

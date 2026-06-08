@@ -454,22 +454,38 @@ export default function AILogger() {
       // 1. Process Expenses
       if (result.expenses?.length > 0) {
         foundAction = true;
-        const { regular, newCategoryExpenses } = parseExpensesForNewCategories(result.expenses);
+        const { regular: knownCategoryExpenses, newCategoryExpenses } = parseExpensesForNewCategories(
+          result.expenses,
+          state.config.budgets
+        );
+        const regular = [...knownCategoryExpenses];
 
         if (newCategoryExpenses.length > 0) {
-          setMessages(prev => [...prev, { role: 'ai', text: `I spotted ${newCategoryExpenses.length} expense(s) with a category I haven't seen before. Let me analyze...` }]);
-          
-          const withSuggestions = await Promise.all(
-            newCategoryExpenses.map(async (exp) => {
-              const suggestion = await suggestNewCategory(
-                state.geminiKey,
-                exp,
-                Object.keys(state.config.budgets)
-              );
-              return { expense: exp, suggestion, budget: suggestion.budget };
-            })
-          );
-          setPendingNewCategories(prev => [...prev, ...withSuggestions]);
+          const categoriesToCreate = [...new Set(
+            newCategoryExpenses.map(exp => exp.suggestedCategoryName)
+          )];
+
+          await Promise.all(categoriesToCreate.map(async categoryName => {
+            const sampleExpense = newCategoryExpenses.find(
+              exp => exp.suggestedCategoryName === categoryName
+            );
+            const suggestion = await suggestNewCategory(
+              state.geminiKey,
+              sampleExpense,
+              Object.keys(state.config.budgets)
+            );
+            await addNewCategory(categoryName, suggestion.budget || 0);
+          }));
+
+          regular.push(...newCategoryExpenses.map(exp => ({
+            ...exp,
+            category: exp.suggestedCategoryName,
+          })));
+
+          setMessages(prev => [...prev, {
+            role: 'ai',
+            text: `I understood the context and automatically created ${categoriesToCreate.join(', ')}.`
+          }]);
         }
 
         if (regular.length > 0) {
