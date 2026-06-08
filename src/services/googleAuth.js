@@ -64,7 +64,7 @@ export function getAccessToken(forcePrompt = false) {
     let resolved = false;
     const timeoutId = setTimeout(() => {
       if (!resolved) reject(new Error('Silent token refresh timed out.'));
-    }, 5000);
+    }, 15000);
 
     tokenClient.callback = (response) => {
       resolved = true;
