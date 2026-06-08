@@ -584,7 +584,8 @@ function callAI(email, request) {
     models: OPENROUTER_MODELS,
     messages: messages,
     temperature: Math.max(0, Math.min(Number(request.temperature) || 0.7, 1.5)),
-    max_tokens: Math.max(1, Math.min(Number(request.maxTokens) || 600, 1200)),
+    max_tokens: Math.max(512, Math.min(Number(request.maxTokens) || 600, 1600)),
+    reasoning: { effort: 'none', exclude: true },
   };
   try {
     const response = UrlFetchApp.fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -595,7 +596,8 @@ function callAI(email, request) {
       muteHttpExceptions: true,
     });
     const data = JSON.parse(response.getContentText() || '{}');
-    const content = String(data.choices?.[0]?.message?.content || '').trim();
+    const message = data.choices?.[0]?.message || {};
+    const content = String(message.content || message.reasoning || message.reasoning_content || '').trim();
     const code = response.getResponseCode();
     if (code >= 200 && code < 300 && content) {
       return { success: true, content, model: data.model || '' };
@@ -604,7 +606,7 @@ function callAI(email, request) {
     return {
       success: true,
       fallback: true,
-      diagnostic: 'openrouter_http_' + code,
+      diagnostic: code >= 200 && code < 300 ? 'openrouter_empty_content' : 'openrouter_http_' + code,
       content: "I'm having trouble reaching AI services right now. Your data remains safe. Please try again shortly.",
     };
   } catch (error) {
