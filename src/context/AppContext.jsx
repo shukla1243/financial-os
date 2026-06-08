@@ -344,7 +344,12 @@ export function AppProvider({ children }) {
   useEffect(() => {
     const email = state.user?.email;
     const userId = getStableUserId(state.user);
-    if (!state.sessionEntryAllowed || !email || !userId || !PROXY_URL || autoInitRef.current === userId) return;
+    if (!state.sessionEntryAllowed || !email || !userId || autoInitRef.current === userId) return;
+    if (!PROXY_URL) {
+      dispatch({ type: 'SET_SYNC_STATUS', payload: { status: 'error' } });
+      dispatch({ type: 'SET_INITIALIZATION_ERROR', payload: 'Workspace service is not configured for this deployment. Add REACT_APP_PROXY_URL in Vercel and redeploy.' });
+      return;
+    }
     autoInitRef.current = userId;
     consciousnessScanRef.current = '';
     lastDriveUpdateRef.current = 0;

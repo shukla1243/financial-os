@@ -276,8 +276,18 @@ function AppShell() {
 
   if (!state.isSessionReady) {
     return (
-      <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: 'var(--bg-main)', color: 'var(--text-muted)' }}>
-        {state.initializationError || 'Verifying your isolated workspace...'}
+      <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding:'24px', background: 'var(--bg-main)', color: 'var(--text-muted)' }}>
+        <div style={{ width:'min(520px, 100%)', textAlign:'center', padding:'28px', border:'1px solid var(--border-color)', borderRadius:'16px', background:'var(--bg-card)' }}>
+          <div style={{ marginBottom:'18px', color:state.initializationError ? '#ef4444' : 'var(--primary-color)', fontFamily:'Orbitron, monospace', fontSize:'13px', lineHeight:1.7 }}>
+            {state.initializationError || 'Verifying your isolated workspace...'}
+          </div>
+          {state.initializationError && (
+            <div style={{ display:'flex', justifyContent:'center', gap:'10px', flexWrap:'wrap' }}>
+              <button onClick={() => window.location.reload()} style={{ padding:'9px 16px', border:0, borderRadius:'8px', background:'linear-gradient(135deg,var(--primary-color),var(--accent-color))', color:'#fff', cursor:'pointer' }}>Retry connection</button>
+              <button onClick={handleLogout} style={{ padding:'9px 16px', border:'1px solid var(--border-color)', borderRadius:'8px', background:'transparent', color:'var(--text-muted)', cursor:'pointer' }}>Disconnect account</button>
+            </div>
+          )}
+        </div>
       </div>
     );
   }
