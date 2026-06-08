@@ -256,7 +256,7 @@ function AppShell() {
     );
   }
 
-  if (state.user?.onboardingCompleted === false) {
+  if (!state.isOnboarded) {
     return <Onboarding />;
   }
 

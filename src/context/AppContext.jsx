@@ -99,7 +99,10 @@ function reducer(state, action) {
       return {
         ...createDefaultState(),
         ...cached,
-        user,
+        user: {
+          ...user,
+          onboardingCompleted: cached?.isOnboarded ?? undefined,
+        },
         isLoggedIn: true,
         isAuthReady: true,
         isAdmin: false,
@@ -298,6 +301,7 @@ export function AppProvider({ children }) {
   const consciousnessRanRef = useRef(false);
   const autoInitRef = useRef('');
   const lastDriveUpdateRef = useRef(0);
+  const writeTimerRef = useRef(null);
 
   useEffect(() => {
     let active = true;
@@ -393,26 +397,29 @@ export function AppProvider({ children }) {
   useEffect(() => {
     const userId = getStableUserId(state.user);
     if (!userId || !state.isLoggedIn) return;
-    const toSave = {
-      profile: state.profile,
-      isOnboarded: state.isOnboarded,
-      config: state.config,
-      tracker: state.tracker,
-      income: state.income,
-      investments: state.investments,
-      savingsGoals: state.savingsGoals,
-      billCalendar: state.billCalendar,
-      monthlySnapshots: state.monthlySnapshots,
-      aiMemory: state.aiMemory,
-      sheetsConfig: state.sheetsConfig,
-      lastSynced: state.lastSynced,
-      appBlueprint: state.appBlueprint,
-      streaks: state.streaks,
-      level: state.level,
-      xp: state.xp,
-      badges: state.badges,
-    };
-    writeUserState(userId, toSave);
+    clearTimeout(writeTimerRef.current);
+    writeTimerRef.current = setTimeout(() => {
+      const toSave = {
+        profile: state.profile,
+        isOnboarded: state.isOnboarded,
+        config: state.config,
+        tracker: state.tracker,
+        income: state.income,
+        investments: state.investments,
+        savingsGoals: state.savingsGoals,
+        billCalendar: state.billCalendar,
+        monthlySnapshots: state.monthlySnapshots,
+        aiMemory: state.aiMemory,
+        sheetsConfig: state.sheetsConfig,
+        lastSynced: state.lastSynced,
+        appBlueprint: state.appBlueprint,
+        streaks: state.streaks,
+        level: state.level,
+        xp: state.xp,
+        badges: state.badges,
+      };
+      writeUserState(userId, toSave);
+    }, 500);
   }, [state]);
 
   // Run consciousness scan once after proxy connects
@@ -436,7 +443,7 @@ export function AppProvider({ children }) {
           });
         }).catch(() => {});
     }
-  }, [state.sheetsConfig?.connected, state.sheetsConfig?.proxyUrl, state.user?.email, state.tracker]);
+  }, [state.sheetsConfig?.connected, state.sheetsConfig?.proxyUrl, state.user?.email]);
 
   // (health score effect moved to after `computed` is defined below)
 
@@ -491,7 +498,15 @@ export function AppProvider({ children }) {
     const { proxyUrl, connected } = state.sheetsConfig;
     const email = state.user?.email;
     if (connected && proxyUrl && email) {
-      await proxyLogExpense(proxyUrl, email, expenseWithId).catch(() => {});
+      await proxyLogExpense(proxyUrl, email, expenseWithId).catch(() => {
+        dispatch({
+          type: 'ADD_NOTIFICATION',
+          payload: {
+            type: 'error',
+            message: '⚠️ Expense saved locally but sheet sync failed. It will retry on next sync.',
+          },
+        });
+      });
     }
   }, [state.sheetsConfig, state.user]);
 
@@ -535,7 +550,15 @@ export function AppProvider({ children }) {
     const { proxyUrl, connected } = state.sheetsConfig;
     const email = state.user?.email;
     if (connected && proxyUrl && email) {
-      await proxyLogIncome(proxyUrl, email, incomeWithId).catch(() => {});
+      await proxyLogIncome(proxyUrl, email, incomeWithId).catch(() => {
+        dispatch({
+          type: 'ADD_NOTIFICATION',
+          payload: {
+            type: 'error',
+            message: '⚠️ Income saved locally but sheet sync failed. It will retry on next sync.',
+          },
+        });
+      });
     }
   }, [state.sheetsConfig, state.user]);
 
@@ -548,7 +571,15 @@ export function AppProvider({ children }) {
     const email = state.user?.email;
     if (connected && proxyUrl && email) {
       const updatedGoals = [...state.savingsGoals, newGoal];
-      await writeGoals(proxyUrl, email, updatedGoals).catch(() => {});
+      await writeGoals(proxyUrl, email, updatedGoals).catch(() => {
+        dispatch({
+          type: 'ADD_NOTIFICATION',
+          payload: {
+            type: 'error',
+            message: '⚠️ Goal saved locally but sheet sync failed. It will retry on next sync.',
+          },
+        });
+      });
     }
   }, [state.sheetsConfig, state.user, state.savingsGoals]);
 
@@ -580,7 +611,15 @@ export function AppProvider({ children }) {
     const { proxyUrl, connected } = state.sheetsConfig;
     const email = state.user?.email;
     if (connected && proxyUrl && email) {
-      await proxyAddCategory(proxyUrl, email, categoryName, budget).catch(() => {});
+      await proxyAddCategory(proxyUrl, email, categoryName, budget).catch(() => {
+        dispatch({
+          type: 'ADD_NOTIFICATION',
+          payload: {
+            type: 'error',
+            message: '⚠️ Category added locally but sheet sync failed. It will retry on next sync.',
+          },
+        });
+      });
     }
   }, [state.sheetsConfig, state.user]);
 

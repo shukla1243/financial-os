@@ -8,6 +8,7 @@ import { proxyAI } from './proxyService';
 
 const inFlightRequests = new Map();
 const AI_FALLBACK = "I'm having trouble reaching AI services right now. Your data remains safe. Please try again shortly.";
+const AI_TIMEOUT_MS = 25000;
 
 export async function callAI({ systemInstruction, contents, temperature = 0.7, maxTokens = 600 }) {
   // Convert Gemini payload format to OpenAI Chat format
@@ -38,12 +39,25 @@ export async function callAI({ systemInstruction, contents, temperature = 0.7, m
   const requestKey = `${user.sub}:${JSON.stringify(request)}`;
   if (inFlightRequests.has(requestKey)) return inFlightRequests.get(requestKey);
 
-  const pending = proxyAI(PROXY_URL, user.email, request)
+  const pending = Promise.race([
+    proxyAI(PROXY_URL, user.email, request),
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('AI_TIMEOUT')), AI_TIMEOUT_MS)
+    )
+  ])
     .then(data => {
       const content = String(data?.content || '').trim();
       return { candidates: [{ content: { parts: [{ text: content || AI_FALLBACK }] } }] };
     })
-    .catch(() => ({ candidates: [{ content: { parts: [{ text: AI_FALLBACK }] } }] }))
+    .catch((err) => {
+      const msg = err?.message || '';
+      const text = msg === 'AI_TIMEOUT'
+        ? 'AI is taking too long to respond. Please try again.'
+        : msg.includes('rate limit') || msg.includes('RATE_LIMIT')
+        ? "You've sent too many requests. Please wait 60 seconds."
+        : AI_FALLBACK;
+      return { candidates: [{ content: { parts: [{ text }] } }] };
+    })
     .finally(() => inFlightRequests.delete(requestKey));
   inFlightRequests.set(requestKey, pending);
   return pending;

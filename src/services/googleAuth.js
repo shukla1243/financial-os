@@ -61,7 +61,14 @@ export function getAccessToken(forcePrompt = false) {
       resolve(currentToken.access_token);
       return;
     }
+    let resolved = false;
+    const timeoutId = setTimeout(() => {
+      if (!resolved) reject(new Error('Silent token refresh timed out.'));
+    }, 5000);
+
     tokenClient.callback = (response) => {
+      resolved = true;
+      clearTimeout(timeoutId);
       if (response.error) {
         reject(new Error(response.error));
         return;
@@ -76,7 +83,7 @@ export function getAccessToken(forcePrompt = false) {
     if (forcePrompt) {
       tokenClient.requestAccessToken({ prompt: 'consent' });
     } else {
-      tokenClient.requestAccessToken();
+      tokenClient.requestAccessToken({ prompt: '' });
     }
   });
 }
@@ -115,6 +122,5 @@ export function isAuthenticated() {
 }
 
 export async function restoreAuthenticatedUser() {
-  if (!isAuthenticated()) return null;
   return getUserInfo();
 }

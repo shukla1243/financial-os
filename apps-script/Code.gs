@@ -539,6 +539,7 @@ function completeOnboarding(ssId, email, profile) {
       Name: cleanProfile.name,
       ProfileJSON: JSON.stringify(cleanProfile),
       ThemeJSON: JSON.stringify(cleanProfile.theme || {}),
+      OnboardingComplete: 'true',
     });
     if (!configResult.success) return configResult;
     if (Array.isArray(profile.goals)) {
@@ -560,8 +561,6 @@ function completeOnboarding(ssId, email, profile) {
       });
       if (!memoryResult.success) return memoryResult;
     }
-    const completionResult = setConfig(ssId, email, 'OnboardingComplete', 'true');
-    if (!completionResult.success) return completionResult;
     return { success: true, profile: cleanProfile };
   } catch (err) {
     return { success: false, error: err.toString() };
@@ -1030,6 +1029,6 @@ function enforceRequestRateLimit(userId) {
   const cache = CacheService.getScriptCache();
   const key = 'request_rate_' + Utilities.base64EncodeWebSafe(userId).slice(0, 80);
   const count = Number(cache.get(key) || 0);
-  if (count >= 120) throw new Error('Request rate limit reached. Try again shortly.');
+  if (count >= 120) throw new Error('RATE_LIMIT: Too many requests. Please wait 60 seconds.');
   cache.put(key, String(count + 1), 60);
 }

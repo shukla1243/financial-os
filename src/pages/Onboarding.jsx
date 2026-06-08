@@ -88,7 +88,11 @@ export default function Onboarding() {
       const msg = e.message || '';
       if (msg.includes('overloaded') || msg.includes('503')) alert('AI Service overloaded. Wait 1-2 min and try again.');
       else if (msg.includes('401') || msg.includes('403') || msg.includes('API key') || msg.includes('Credentials')) alert('Invalid API key. Check at openrouter.ai/keys');
-      else alert('Connection failed: ' + msg);
+      else if (msg.includes('rate limit') || msg.includes('RATE_LIMIT')) {
+        alert('Too many requests — please wait 60 seconds and try again.');
+      } else {
+        alert('Connection failed. Please check your internet and try again.');
+      }
     } finally { setLoading(false); }
   };
 
@@ -166,7 +170,12 @@ export default function Onboarding() {
       }
     } catch (e) {
       const msg = e.message || '';
-      setMessages(prev => [...prev, { role: 'ai', text: msg.includes('overloaded') ? '⚠️ Gemini overloaded, try again in a moment.' : 'Something went wrong. Try again.' }]);
+      const text = msg.includes('rate limit') || msg.includes('RATE_LIMIT')
+        ? '⚠️ Too many requests — please wait 60 seconds and try again.'
+        : msg.includes('overloaded')
+        ? '⚠️ Gemini overloaded, try again in a moment.'
+        : 'Something went wrong. Try again.';
+      setMessages(prev => [...prev, { role: 'ai', text }]);
     } finally { setLoading(false); }
   };
 
