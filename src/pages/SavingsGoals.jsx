@@ -21,7 +21,7 @@ function ProgressRing({ pct, color, size = 100 }) {
   );
 }
 
-function GoalCard({ goal, onUpdate, delay = 0 }) {
+function GoalCard({ goal, onUpdate, onDelete, delay = 0 }) {
   const pct = goal.target > 0 ? Math.min(Math.round((goal.saved / goal.target) * 100), 100) : 0;
   const color = COLOR_MAP[goal.color] || '#7c3aed';
   const remaining = goal.target - goal.saved;
@@ -56,6 +56,7 @@ function GoalCard({ goal, onUpdate, delay = 0 }) {
           <div style={{ fontFamily: 'Orbitron, monospace', fontWeight: 700, color:'var(--text-main)', fontSize:'14px' }}>{goal.name}</div>
           <div style={{ fontSize:'11px', color:'var(--text-muted)', marginTop:'2px' }}>Target: ₹{goal.target.toLocaleString()}</div>
         </div>
+        <button onClick={() => window.confirm(`Remove ${goal.name}?`) && onDelete(goal.id)} title="Remove goal" style={{ alignSelf:'flex-start', border:'1px solid #ef444430', background:'#ef444410', color:'#ef4444', borderRadius:8, padding:6, cursor:'pointer' }}><X size={13} /></button>
         {/* Ring */}
         <div style={{ position:'relative', display:'flex', alignItems:'center', justifyContent:'center' }}>
           <ProgressRing pct={pct} color={color} size={90} />
@@ -135,7 +136,7 @@ const ICONS = ['✈️','🛡️','📈','🏠','🚗','💻','📱','🎓','�
 const COLORS = ['cyan','purple','pink','gold','success','orange'];
 
 export default function SavingsGoals() {
-  const { state, addGoal, updateGoal } = useApp();
+  const { state, addGoal, updateGoal, deleteGoal } = useApp();
   const { savingsGoals } = state;
   const [showAdd, setShowAdd] = useState(false);
   const [newGoal, setNewGoal] = useState({ name:'', target:'', monthlyAdd:'', deadline:'', icon:'🎯', color:'purple' });
@@ -190,7 +191,7 @@ export default function SavingsGoals() {
       {/* Goals Grid */}
       <div style={{ display: 'grid', gap: '16px', marginBottom: '24px', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
         {savingsGoals.map((goal, idx) => (
-          <GoalCard key={goal.id} goal={goal} onUpdate={handleUpdate} delay={idx * 0.08} />
+          <GoalCard key={goal.id} goal={goal} onUpdate={handleUpdate} onDelete={deleteGoal} delay={idx * 0.08} />
         ))}
       </div>
 

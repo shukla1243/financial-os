@@ -21,6 +21,8 @@ test('keeps built-in anime theme atmosphere options', () => {
   const theme = normalizeTheme(THEME_PRESETS.oceanDragon);
   expect(theme.themeName).toBe('Ocean Dragon');
   expect(theme.decorations).toBe('water-ripples');
+  expect(theme.deviceProfiles.desktop.navStyle).toBe('rail');
+  expect(theme.deviceProfiles.mobile.navStyle).toBe('dock');
 });
 
 test('normalizes the generated visual direction grammar', () => {

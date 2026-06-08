@@ -22,6 +22,7 @@ import AllExpenses from './pages/AllExpenses';
 import NewSectionToast from './components/NewSectionToast';
 import { revokeToken } from './services/googleAuth';
 import { readUserState } from './services/userStorage';
+import { resolveThemeForDevice } from './services/themeEngine';
 
 function Topbar() {
   const { state } = useApp();
@@ -120,6 +121,7 @@ function Topbar() {
 function ThemeEffects() {
   const { state } = useApp();
   const theme = state.config?.theme;
+  const [deviceMode, setDeviceMode] = useState(() => window.matchMedia('(max-width: 760px)').matches ? 'mobile' : 'desktop');
   const decorations = theme?.decorations || 'none';
 
   if (['shadow-particles', 'neon-city', 'crimson-clouds', 'water-ripples', 'hud-grid'].includes(decorations)) {
@@ -219,7 +221,7 @@ import useInjectLogout from './hooks/useInjectLogout';
 function AppShell() {
   const { state, dispatch } = useApp();
   const theme = state.config?.theme;
-  const [publicView, setPublicView] = useState('landing');
+  const [publicView, setPublicView] = useState(() => sessionStorage.getItem('financial_os_entered') === 'true' ? 'app' : 'landing');
 
   // Run dynamic logout button injection
   useInjectLogout();
@@ -229,20 +231,30 @@ function AppShell() {
       import('./services/themeEngine').then(({ applyDynamicTheme }) => {
         applyDynamicTheme(theme);
       });
+      const media = window.matchMedia('(max-width: 760px)');
+      const reapply = event => {
+        setDeviceMode(event.matches ? 'mobile' : 'desktop');
+        import('./services/themeEngine').then(({ applyDynamicTheme }) => applyDynamicTheme(theme));
+      };
+      media.addEventListener?.('change', reapply);
+      return () => media.removeEventListener?.('change', reapply);
     }
   }, [theme]);
 
   const handleLogin = (user) => {
+    sessionStorage.setItem('financial_os_entered', 'true');
     dispatch({ type: 'SWITCH_USER', payload: { user, cached: readUserState(user), allowInit: true } });
     setPublicView('app');
   };
 
   const openSignIn = () => {
+    sessionStorage.setItem('financial_os_entered', 'true');
     dispatch({ type: 'SET_SESSION_ENTRY_ALLOWED', payload: true });
     setPublicView('signin');
   };
 
   const handleLogout = () => {
+    sessionStorage.removeItem('financial_os_entered');
     revokeToken();
     dispatch({ type: 'RESET_SESSION' });
     window.location.reload();
@@ -251,7 +263,7 @@ function AppShell() {
   if (publicView === 'landing') return <Login onEnter={openSignIn} />;
 
   if (publicView === 'signin') {
-    return <SignIn restoredUser={state.isLoggedIn ? state.user : null} sessionReady={state.isSessionReady} onBack={() => setPublicView('landing')} onLogin={handleLogin} onContinue={() => setPublicView('app')} />;
+    return <SignIn restoredUser={state.isLoggedIn ? state.user : null} sessionReady={state.isSessionReady} onBack={() => setPublicView('landing')} onLogin={handleLogin} onContinue={() => setPublicView('app')} onLogout={handleLogout} />;
   }
 
   if (state.isSuspended) {
@@ -282,7 +294,8 @@ function AppShell() {
     );
   }
 
-  const layout = theme?.layout || 'left-sidebar';
+  const effectiveTheme = theme ? resolveThemeForDevice(theme, deviceMode) : null;
+  const layout = effectiveTheme?.layout || 'left-sidebar';
   const showSidebar = layout === 'left-sidebar' || layout === 'right-sidebar';
   
   let mainContainerStyle = {

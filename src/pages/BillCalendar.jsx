@@ -15,8 +15,12 @@ const CATEGORY_ICONS = {
 export default function BillCalendar() {
   const { state, updateBill, addExpense } = useApp();
   const { billCalendar, config } = state;
-  const today = new Date().getDate();
-  const daysInMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate();
+  const monthIndex = Math.max(0, new Date(`${config.activeMonth} 1, ${config.activeYear}`).getMonth());
+  const activeDate = new Date(Number(config.activeYear), monthIndex, 1);
+  const now = new Date();
+  const isCurrentMonth = now.getFullYear() === activeDate.getFullYear() && now.getMonth() === activeDate.getMonth();
+  const today = isCurrentMonth ? now.getDate() : 0;
+  const daysInMonth = new Date(activeDate.getFullYear(), activeDate.getMonth() + 1, 0).getDate();
   const [submittingBills, setSubmittingBills] = useState({});
 
   const totalMonthly = billCalendar.filter(b => b.frequency === 'Monthly').reduce((s, b) => s + b.amount, 0);
@@ -35,10 +39,10 @@ export default function BillCalendar() {
     if (submittingBills[bill.id]) return;
     setSubmittingBills(prev => ({ ...prev, [bill.id]: true }));
     try {
-      await updateBill({ ...bill, status:'Paid' });
-      const todayObj = new Date();
-      const dayStr = todayObj.toLocaleString('default', { weekday:'short' });
-      const fullDateStr = todayObj.toISOString().split('T')[0];
+      const paymentDate = new Date(activeDate.getFullYear(), activeDate.getMonth(), Math.min(Number(bill.dueDate) || 1, daysInMonth));
+      const fullDateStr = paymentDate.toISOString().split('T')[0];
+      await updateBill({ ...bill, status:'Paid', lastPaid: fullDateStr });
+      const dayStr = paymentDate.toLocaleString('default', { weekday:'short' });
 
       await addExpense({
         month: config.activeMonth,
@@ -71,7 +75,7 @@ export default function BillCalendar() {
   };
 
   // Build calendar days
-  const firstDay = new Date(new Date().getFullYear(), new Date().getMonth(), 1).getDay();
+  const firstDay = activeDate.getDay();
   const calDays = [];
   for (let i = 0; i < firstDay; i++) calDays.push(null);
   for (let d = 1; d <= daysInMonth; d++) calDays.push(d);
@@ -112,7 +116,7 @@ export default function BillCalendar() {
         {/* Calendar Grid */}
         <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '20px' }}>
           <div style={{ fontSize:'10px', color:'var(--text-muted)', letterSpacing:'1.5px', marginBottom:'16px' }}>
-            {new Date().toLocaleString('default', { month:'long', year:'numeric' }).toUpperCase()}
+            {activeDate.toLocaleString('default', { month:'long', year:'numeric' }).toUpperCase()}
           </div>
           {/* Day headers */}
           <div style={{ display:'grid', gridTemplateColumns:'repeat(7, 1fr)', gap:'4px', marginBottom:'8px' }}>
@@ -159,7 +163,7 @@ export default function BillCalendar() {
         {/* Bill List */}
         <div style={{ display:'flex', flexDirection:'column', gap:'10px' }}>
           <div style={{ fontSize:'10px', color:'var(--text-muted)', letterSpacing:'1.5px', marginBottom:'4px' }}>ALL BILLS THIS MONTH</div>
-          {billCalendar
+          {[...billCalendar]
             .sort((a, b) => a.dueDate - b.dueDate)
             .map((bill, idx) => {
               const status = getBillStatus(bill);

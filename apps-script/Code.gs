@@ -45,7 +45,7 @@ const SCHEMAS = {
   Blueprint:       ['Email', 'SectionID', 'Name', 'Icon', 'SheetRef', 'Status', 'CreatedOn'],
 };
 
-const REGISTRY_SCHEMA = ['Email', 'UserID', 'Name', 'SpreadsheetID', 'SpreadsheetURL', 'Status', 'CreatedOn', 'LastActiveOn', 'Reason', 'Plan'];
+const REGISTRY_SCHEMA = ['Email', 'UserID', 'Name', 'SpreadsheetID', 'SpreadsheetURL', 'Status', 'CreatedOn', 'LastActiveOn', 'Reason', 'Plan', 'PlanExpiresOn', 'OwnerGift', 'GiftID'];
 
 // ─── ENTRY POINT ──────────────────────────────────────────────────────────────
 
@@ -83,7 +83,7 @@ function doPost(e) {
       if (email.toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
         return jsonResponse({ success: false, error: 'Unauthorized: Admin access required.' });
       }
-      return jsonResponse(toggleUserPlan(data.targetEmail, data.plan));
+      return jsonResponse(toggleUserPlan(data.targetEmail, data.plan, data.durationDays, data.giftMessage));
     }
 
     if (action === 'getUserStatus') {
@@ -482,7 +482,9 @@ function getAdminRegistry() {
         status: registryData[i][5],
         createdOn: registryData[i][6],
         lastActiveOn: registryData[i][7],
-        plan: registryData[i][9] || 'Free'
+        plan: registryData[i][9] || 'Free',
+        planExpiresOn: registryData[i][10] || '',
+        giftMessage: registryData[i][11] || ''
       });
     }
     return { success: true, data };
@@ -515,7 +517,7 @@ function toggleUserStatus(targetEmail, status, reason = '') {
   }
 }
 
-function toggleUserPlan(targetEmail, plan) {
+function toggleUserPlan(targetEmail, plan, durationDays, giftMessage) {
   try {
     if (!['Free', 'Pro'].includes(plan)) return { success: false, error: 'Invalid plan.' };
     const masterSs = getSpreadsheet();
@@ -526,8 +528,16 @@ function toggleUserPlan(targetEmail, plan) {
     const registryData = registrySheet.getRange(1, 1, lastRow, REGISTRY_SCHEMA.length).getValues();
     for (let i = 1; i < registryData.length; i++) {
       if (registryData[i][0].toString().toLowerCase() === targetEmail.toLowerCase()) {
+        const expiresOn = plan === 'Pro' && Number(durationDays) > 0
+          ? new Date(Date.now() + Number(durationDays) * 24 * 60 * 60 * 1000)
+          : '';
+        const gift = sanitizeCell(giftMessage || (plan === 'Pro' ? 'A Pro access gift from the Financial OS owner.' : ''));
+        const giftId = gift ? Utilities.getUuid() : '';
         registrySheet.getRange(i + 1, 10).setValue(plan);
-        return { success: true, plan };
+        registrySheet.getRange(i + 1, 11).setValue(expiresOn);
+        registrySheet.getRange(i + 1, 12).setValue(gift);
+        registrySheet.getRange(i + 1, 13).setValue(giftId);
+        return { success: true, plan, planExpiresOn: expiresOn, giftMessage: gift, giftId };
       }
     }
     return { success: false, error: 'User not found in registry.' };
@@ -556,8 +566,20 @@ function getUserStatusAction(email) {
       if (registryData[i][0].toString().toLowerCase() === email.toLowerCase()) {
         const status = registryData[i][5]?.toString() || 'Active';
         const reason = registryData[i][8]?.toString() || ''; // Optional Column 9 for Reason
-        const plan = registryData[i][9]?.toString() || 'Free';
-        return { success: true, status, reason, plan };
+        let plan = registryData[i][9]?.toString() || 'Free';
+        const expiryValue = registryData[i][10];
+        const expiryDate = expiryValue ? new Date(expiryValue) : null;
+        if (plan === 'Pro' && expiryDate && !isNaN(expiryDate.getTime()) && expiryDate.getTime() <= Date.now()) {
+          plan = 'Free';
+          registrySheet.getRange(i + 1, 10).setValue('Free');
+          registrySheet.getRange(i + 1, 11).clearContent();
+        }
+        return {
+          success: true, status, reason, plan,
+          planExpiresOn: plan === 'Pro' && expiryDate ? expiryDate.toISOString() : '',
+          giftMessage: registryData[i][11]?.toString() || '',
+          giftId: registryData[i][12]?.toString() || ''
+        };
       }
     }
     return { success: true, status: 'Active', plan: 'Free' };

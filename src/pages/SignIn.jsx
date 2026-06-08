@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { ArrowLeft, ArrowRight, CheckCircle, LockKeyhole, UserRound, Zap } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle, LockKeyhole, LogOut, UserRound, Zap } from 'lucide-react';
 import { getAccessToken, getUserInfo } from '../services/googleAuth';
 
-export default function SignIn({ restoredUser, sessionReady, onBack, onLogin, onContinue }) {
+export default function SignIn({ restoredUser, sessionReady, onBack, onLogin, onContinue, onLogout }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -37,9 +37,12 @@ export default function SignIn({ restoredUser, sessionReady, onBack, onLogin, on
           </div>
         )}
         {restoredUser ? (
-          <button className="landing-primary signin-main-action" onClick={onContinue} disabled={!sessionReady}>
-            {sessionReady ? 'Continue to your OS' : 'Preparing your workspace...'} <ArrowRight size={16} />
-          </button>
+          <>
+            <button className="landing-primary signin-main-action" onClick={onContinue} disabled={!sessionReady}>
+              {sessionReady ? 'Continue to your OS' : 'Preparing your workspace...'} <ArrowRight size={16} />
+            </button>
+            <button className="signin-disconnect" onClick={onLogout}><LogOut size={14} /> Disconnect this account</button>
+          </>
         ) : (
           <button className="signin-google" onClick={handleGoogleLogin} disabled={loading}>
             <span>G</span>{loading ? 'Connecting securely...' : 'Continue with Google'}<ArrowRight size={15} />

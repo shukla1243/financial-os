@@ -21,7 +21,10 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
-  const [updatingUser, setUpdatingUser] = useState(null);
+  const [updatingStatusUser, setUpdatingStatusUser] = useState(null);
+  const [updatingPlanUser, setUpdatingPlanUser] = useState(null);
+  const [proDuration, setProDuration] = useState('2');
+  const [giftMessage, setGiftMessage] = useState('A Pro access gift from the Financial OS owner.');
   const [searchQuery, setSearchQuery] = useState('');
 
   // Redirect non-admins
@@ -61,7 +64,7 @@ export default function AdminDashboard() {
       return;
     }
 
-    setUpdatingUser(targetEmail);
+    setUpdatingStatusUser(targetEmail);
     setError('');
     setSuccessMessage('');
     try {
@@ -81,23 +84,23 @@ export default function AdminDashboard() {
     } catch (err) {
       setError(err.message || 'An error occurred during status update.');
     } finally {
-      setUpdatingUser(null);
+      setUpdatingStatusUser(null);
     }
   };
 
   const handleTogglePlan = async (targetEmail, currentPlan) => {
     const nextPlan = currentPlan === 'Pro' ? 'Free' : 'Pro';
-    setUpdatingUser(targetEmail);
+    setUpdatingPlanUser(targetEmail);
     setError('');
     try {
-      const res = await toggleUserPlan(state.sheetsConfig.proxyUrl, state.user.email, targetEmail, nextPlan);
+      const res = await toggleUserPlan(state.sheetsConfig.proxyUrl, state.user.email, targetEmail, nextPlan, nextPlan === 'Pro' ? Number(proDuration) : 0, nextPlan === 'Pro' ? giftMessage : '');
       if (!res.success) throw new Error(res.error || 'Failed to update plan.');
-      setUsers(prev => prev.map(user => user.email === targetEmail ? { ...user, plan: nextPlan } : user));
+      setUsers(prev => prev.map(user => user.email === targetEmail ? { ...user, plan: nextPlan, planExpiresOn: res.planExpiresOn || '', giftMessage: res.giftMessage || '' } : user));
       setSuccessMessage(`${targetEmail} is now on the ${nextPlan} plan.`);
     } catch (err) {
       setError(err.message || 'Could not update plan.');
     } finally {
-      setUpdatingUser(null);
+      setUpdatingPlanUser(null);
     }
   };
 
@@ -190,6 +193,10 @@ export default function AdminDashboard() {
               onBlur={e => e.currentTarget.style.borderColor = 'var(--border-color)'}
             />
           </div>
+          <select value={proDuration} onChange={e => setProDuration(e.target.value)} style={{ ...S.input, width:'150px' }}>
+            <option value="2">Pro for 2 days</option><option value="7">Pro for 7 days</option><option value="30">Pro for 30 days</option><option value="0">Pro lifetime</option>
+          </select>
+          <input value={giftMessage} onChange={e => setGiftMessage(e.target.value)} placeholder="Owner gift notification" style={{ ...S.input, width:'280px' }} />
         </div>
 
         {/* Loading Spinner */}
@@ -224,7 +231,8 @@ export default function AdminDashboard() {
               <tbody>
                 {filteredUsers.map((user, idx) => {
                   const isActive = user.status === 'Active';
-                  const isUpdating = updatingUser === user.email;
+                  const isStatusUpdating = updatingStatusUser === user.email;
+                  const isPlanUpdating = updatingPlanUser === user.email;
                   return (
                     <tr
                       key={user.email}
@@ -328,10 +336,10 @@ export default function AdminDashboard() {
                       <td style={{ padding: '14px 8px' }}>
                         <button
                           onClick={() => handleTogglePlan(user.email, user.plan || 'Free')}
-                          disabled={isUpdating}
-                          style={{ background: user.plan === 'Pro' ? '#7c3aed20' : 'transparent', color: user.plan === 'Pro' ? '#c4b5fd' : 'var(--text-muted)', border: '1px solid #7c3aed40', borderRadius: '6px', padding: '5px 10px', fontSize: '10px', fontWeight: 700, cursor: isUpdating ? 'not-allowed' : 'pointer' }}
+                          disabled={isPlanUpdating}
+                          style={{ background: user.plan === 'Pro' ? '#7c3aed20' : 'transparent', color: user.plan === 'Pro' ? '#c4b5fd' : 'var(--text-muted)', border: '1px solid #7c3aed40', borderRadius: '6px', padding: '5px 10px', fontSize: '10px', fontWeight: 700, cursor: isPlanUpdating ? 'not-allowed' : 'pointer', transition:'transform .15s ease, box-shadow .2s ease', animation:isPlanUpdating ? 'proPulse .8s ease-in-out infinite alternate' : 'none' }}
                         >
-                          {user.plan === 'Pro' ? 'PRO' : 'FREE'}
+                          {isPlanUpdating ? 'UPDATING' : user.plan === 'Pro' ? 'PRO' : 'FREE'}
                         </button>
                       </td>
 
@@ -339,7 +347,7 @@ export default function AdminDashboard() {
                       <td style={{ padding: '14px 8px', textAlign: 'right' }}>
                         <button
                           onClick={() => handleToggleStatus(user.email, user.status)}
-                          disabled={isUpdating}
+                          disabled={isStatusUpdating}
                           style={{
                             background: 'transparent',
                             color: isActive ? '#ef4444' : '#10b981',
@@ -348,26 +356,26 @@ export default function AdminDashboard() {
                             padding: '5px 12px',
                             fontSize: '11px',
                             fontWeight: 600,
-                            cursor: isUpdating ? 'not-allowed' : 'pointer',
+                            cursor: isStatusUpdating ? 'not-allowed' : 'pointer',
                             display: 'inline-flex',
                             alignItems: 'center',
                             gap: '4px',
                             transition: 'all 0.2s'
                           }}
                           onMouseEnter={e => {
-                            if (!isUpdating) {
+                            if (!isStatusUpdating) {
                               e.currentTarget.style.background = isActive ? '#ef444415' : '#10b98115';
                               e.currentTarget.style.borderColor = isActive ? '#ef444460' : '#10b98160';
                             }
                           }}
                           onMouseLeave={e => {
-                            if (!isUpdating) {
+                            if (!isStatusUpdating) {
                               e.currentTarget.style.background = 'transparent';
                               e.currentTarget.style.borderColor = isActive ? '#ef444430' : '#10b98130';
                             }
                           }}
                         >
-                          {isUpdating ? (
+                          {isStatusUpdating ? (
                             <Loader size={11} style={{ animation: 'spin 1.5s linear infinite' }} />
                           ) : isActive ? (
                             <UserX size={11} />
@@ -390,6 +398,7 @@ export default function AdminDashboard() {
         @keyframes spin { 
           to { transform: rotate(360deg); } 
         }
+        @keyframes proPulse { from { transform:scale(.96); box-shadow:0 0 4px #7c3aed30 } to { transform:scale(1.04); box-shadow:0 0 18px #7c3aed90 } }
         @keyframes slideUp { 
           from { transform: translateY(20px); opacity: 0; } 
           to { transform: translateY(0); opacity: 1; } 

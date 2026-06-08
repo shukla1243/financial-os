@@ -10,6 +10,7 @@ import {
   loadAllFromProxy,
   addCategory as proxyAddCategory,
   proxyCheckUpdates,
+  getUserStatus,
   getDynamicSheet,
   completeOnboarding as proxyCompleteOnboarding,
   saveConfig as proxySaveConfig,
@@ -81,6 +82,7 @@ export const createDefaultState = () => ({
     financialHealthScore: null,
     isAdmin: false,
     plan: 'Free',
+    planExpiresOn: '',
   });
 
 const getInitialState = () => {
@@ -168,6 +170,8 @@ function reducer(state, action) {
       return { ...state, savingsGoals: [...state.savingsGoals, { ...action.payload, id: action.payload.id || Date.now() }] };
     case 'SET_GOALS':
       return { ...state, savingsGoals: action.payload };
+    case 'DELETE_GOAL':
+      return { ...state, savingsGoals: state.savingsGoals.filter(g => g.id !== action.payload) };
     case 'UPDATE_BILL':
       return { ...state, billCalendar: state.billCalendar.map(b => b.id === action.payload.id ? { ...b, ...action.payload } : b) };
     case 'SET_SHEETS_CONFIG':
@@ -178,6 +182,10 @@ function reducer(state, action) {
       return { ...state, notifications: [...state.notifications, { id: Date.now(), ...action.payload }] };
     case 'REMOVE_NOTIFICATION':
       return { ...state, notifications: state.notifications.filter(n => n.id !== action.payload) };
+    case 'MARK_NOTIFICATIONS_READ':
+      return { ...state, notifications: state.notifications.map(n => ({ ...n, read: true })) };
+    case 'CLEAR_NOTIFICATIONS':
+      return { ...state, notifications: [] };
     case 'TOGGLE_SIDEBAR':
       return { ...state, sidebarOpen: !state.sidebarOpen };
     case 'ADD_AI_MEMORY':
@@ -207,7 +215,7 @@ function reducer(state, action) {
     case 'SET_HEALTH_SCORE':
       return { ...state, financialHealthScore: action.payload };
     case 'SET_PLAN':
-      return { ...state, plan: action.payload === 'Pro' ? 'Pro' : 'Free' };
+      return { ...state, plan: action.payload?.plan === 'Pro' || action.payload === 'Pro' ? 'Pro' : 'Free', planExpiresOn: action.payload?.planExpiresOn || '' };
     case 'LOAD_FROM_PROXY': {
       let parsedTheme = null;
       if (action.payload.config?.ThemeJSON) {
@@ -350,7 +358,12 @@ export function AppProvider({ children }) {
         try {
           const { getUserStatus } = await import('../services/proxyService');
           const statusRes = await getUserStatus(PROXY_URL, email);
-          if (statusRes.success) dispatch({ type: 'SET_PLAN', payload: statusRes.plan });
+          if (statusRes.success) {
+            dispatch({ type: 'SET_PLAN', payload: statusRes });
+            if (statusRes.giftMessage && !state.notifications.some(n => n.giftId === statusRes.giftId)) {
+              dispatch({ type: 'ADD_NOTIFICATION', payload: { giftId: statusRes.giftId, type: 'gift', message: statusRes.giftMessage, read: false } });
+            }
+          }
           if (statusRes.success && statusRes.status === 'Suspended') {
             isUserSuspended = true;
             suspendReasonText = statusRes.reason || 'Account suspended by administrator.';
@@ -435,6 +448,9 @@ export function AppProvider({ children }) {
         level: state.level,
         xp: state.xp,
         badges: state.badges,
+        notifications: state.notifications,
+        plan: state.plan,
+        planExpiresOn: state.planExpiresOn,
       };
       writeUserState(userId, toSave);
     }, 500);
@@ -474,6 +490,13 @@ export function AppProvider({ children }) {
     try {
       const data = await loadAllFromProxy(proxyUrl, email);
       if (!data.success) throw new Error(data.error || 'Sync failed');
+      const statusRes = await getUserStatus(proxyUrl, email).catch(() => null);
+      if (statusRes?.success) {
+        dispatch({ type: 'SET_PLAN', payload: statusRes });
+        if (statusRes.giftMessage && !state.notifications.some(n => n.giftId === statusRes.giftId)) {
+          dispatch({ type: 'ADD_NOTIFICATION', payload: { giftId: statusRes.giftId, type: 'gift', message: statusRes.giftMessage, read: false } });
+        }
+      }
       const invData = await getDynamicSheet(proxyUrl, email, 'Investments').catch(() => []);
       data.investments = await resolveAllInvestments(invData);
       dispatch({ type: 'LOAD_FROM_PROXY', payload: data });
@@ -486,7 +509,7 @@ export function AppProvider({ children }) {
       dispatch({ type: 'SET_SYNC_STATUS', payload: { status: 'error' } });
       return { success: false, error: e.message };
     }
-  }, []);
+  }, [state.notifications]);
 
   // ─── AUTO-SYNC POLLER ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -628,6 +651,14 @@ export function AppProvider({ children }) {
       const updatedGoals = state.savingsGoals.map(g => g.id === goal.id ? { ...g, ...goal } : g);
       await writeGoals(proxyUrl, email, updatedGoals).catch(() => {});
     }
+  }, [state.sheetsConfig, state.user, state.savingsGoals]);
+
+  const deleteGoal = useCallback(async (goalId) => {
+    const updatedGoals = state.savingsGoals.filter(goal => goal.id !== goalId);
+    dispatch({ type: 'DELETE_GOAL', payload: goalId });
+    const { proxyUrl, connected } = state.sheetsConfig;
+    const email = state.user?.email;
+    if (connected && proxyUrl && email) await writeGoals(proxyUrl, email, updatedGoals);
   }, [state.sheetsConfig, state.user, state.savingsGoals]);
 
   // ─── UPDATE BILL ─────────────────────────────────────────────────────────────
@@ -776,7 +807,7 @@ export function AppProvider({ children }) {
   }, [computed.totalIncome, computed.savingsRate, computed.categorySpend, state.tracker.length, state.income.length, state.config.budgets, state.savingsGoals, state.financialHealthScore]);
 
   return (
-    <AppContext.Provider value={{ state, dispatch, computed, addExpense, deleteExpense, addNewCategory, syncFromSheets, addIncome, addGoal, updateGoal, updateBill, addMemoryFact, updateTheme, completeOnboarding, saveSettings }}>
+    <AppContext.Provider value={{ state, dispatch, computed, addExpense, deleteExpense, addNewCategory, syncFromSheets, addIncome, addGoal, updateGoal, deleteGoal, updateBill, addMemoryFact, updateTheme, completeOnboarding, saveSettings }}>
       {children}
     </AppContext.Provider>
   );

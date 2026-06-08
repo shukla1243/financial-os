@@ -60,13 +60,23 @@ export default function Header({ onLogout }) {
 
         {/* Notifications */}
         <div style={{ position: 'relative' }}>
-          <button onClick={() => setShowNotifs(!showNotifs)} onMouseDown={e => e.currentTarget.style.transform = 'scale(0.92)'} onMouseUp={e => e.currentTarget.style.transform = 'scale(1)'} onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+          <button onClick={() => { setShowNotifs(!showNotifs); dispatch({ type: 'MARK_NOTIFICATIONS_READ' }); }} onMouseDown={e => e.currentTarget.style.transform = 'scale(0.92)'} onMouseUp={e => e.currentTarget.style.transform = 'scale(1)'} onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
             style={{ width: 32, height: 32, borderRadius: '8px', border: '1px solid var(--border-color, var(--border-color))', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', position: 'relative', transition: 'transform 0.1s ease' }}>
             <Bell size={14} />
             {unreadNotifs.length > 0 && (
               <div style={{ position: 'absolute', top: '-2px', right: '-2px', width: 8, height: 8, borderRadius: '50%', background: '#ef4444', animation: 'float 1.5s ease-in-out infinite' }} />
             )}
           </button>
+          {showNotifs && (
+            <div style={{ position:'absolute', right:0, top:40, width:300, maxHeight:360, overflowY:'auto', padding:10, border:'1px solid var(--border-color)', borderRadius:12, background:'var(--bg-sidebar)', boxShadow:'0 18px 55px #0008', zIndex:200 }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
+                <strong style={{ fontSize:11, color:'var(--text-main)' }}>Notifications</strong>
+                {(state.notifications || []).length > 0 && <button onClick={() => dispatch({ type:'CLEAR_NOTIFICATIONS' })} style={{ border:0, background:'transparent', color:'var(--text-muted)', cursor:'pointer', fontSize:9 }}>Clear all</button>}
+              </div>
+              {(state.notifications || []).length === 0 ? <div style={{ padding:18, color:'var(--text-muted)', fontSize:10, textAlign:'center' }}>No notifications yet.</div> :
+                [...state.notifications].reverse().map(n => <div key={n.id} style={{ padding:'9px 10px', marginBottom:6, borderRadius:8, background:n.type === 'gift' ? '#7c3aed18' : '#ffffff08', color:'var(--text-main)', fontSize:10, lineHeight:1.5 }}>{n.message}</div>)}
+            </div>
+          )}
         </div>
 
         {/* AI insights badge */}

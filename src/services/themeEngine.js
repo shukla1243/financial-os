@@ -189,7 +189,7 @@ export function normalizeTheme(theme, fallback = THEME_PRESETS.freelancer) {
     navStyle: fallback.layout === 'topbar' ? 'bar' : 'rail',
     glowStrength: 'medium',
   };
-  return {
+  const normalized = {
     ...fallback,
     ...visualFallback,
     ...theme,
@@ -204,13 +204,50 @@ export function normalizeTheme(theme, fallback = THEME_PRESETS.freelancer) {
     navStyle: allowedNavStyles.includes(theme.navStyle) ? theme.navStyle : visualFallback.navStyle,
     glowStrength: ['low', 'medium', 'high'].includes(theme.glowStrength) ? theme.glowStrength : visualFallback.glowStrength,
   };
+  const normalizeProfile = (profile, deviceFallback) => {
+    if (!profile || typeof profile !== 'object') return deviceFallback;
+    return {
+      layout: allowedLayouts.includes(profile.layout) ? profile.layout : deviceFallback.layout,
+      contentDensity: allowedDensity.includes(profile.contentDensity) ? profile.contentDensity : deviceFallback.contentDensity,
+      heroStyle: allowedHeroStyles.includes(profile.heroStyle) ? profile.heroStyle : deviceFallback.heroStyle,
+      navStyle: allowedNavStyles.includes(profile.navStyle) ? profile.navStyle : deviceFallback.navStyle,
+      motionStyle: allowedMotion.includes(profile.motionStyle) ? profile.motionStyle : deviceFallback.motionStyle,
+    };
+  };
+  const desktopFallback = {
+    layout: normalized.layout,
+    contentDensity: normalized.contentDensity,
+    heroStyle: normalized.heroStyle,
+    navStyle: normalized.navStyle === 'dock' ? 'rail' : normalized.navStyle,
+    motionStyle: normalized.motionStyle,
+  };
+  const mobileFallback = {
+    layout: 'left-sidebar',
+    contentDensity: 'compact',
+    heroStyle: normalized.heroStyle,
+    navStyle: 'dock',
+    motionStyle: normalized.motionStyle === 'cinematic' ? 'float' : normalized.motionStyle,
+  };
+  return {
+    ...normalized,
+    deviceProfiles: {
+      desktop: normalizeProfile(theme.deviceProfiles?.desktop, desktopFallback),
+      mobile: normalizeProfile(theme.deviceProfiles?.mobile, mobileFallback),
+    },
+  };
+}
+
+export function resolveThemeForDevice(theme, forcedDevice) {
+  const normalized = normalizeTheme(theme);
+  const device = forcedDevice || (typeof window !== 'undefined' && window.matchMedia('(max-width: 760px)').matches ? 'mobile' : 'desktop');
+  return { ...normalized, ...(normalized.deviceProfiles?.[device] || {}), deviceProfiles: normalized.deviceProfiles };
 }
 
 /**
  * Injects a stylesheet into the document head dynamically using theme properties.
  */
 export function applyDynamicTheme(theme) {
-  const normalizedTheme = normalizeTheme(theme);
+  const normalizedTheme = resolveThemeForDevice(theme);
   theme = normalizedTheme;
   let styleEl = document.getElementById('dynamic-theme-injected');
   if (!styleEl) {

@@ -131,6 +131,9 @@ export default function Sidebar() {
       <div style={{ flex: 1, overflowY: 'auto', padding: open ? '12px 10px' : '12px 8px' }}>
         {/* Static nav */}
         {STATIC_NAV.map(item => <NavItem key={item.path} {...item} />)}
+        <div className="sidebar-mobile-settings">
+          <NavItem path="/settings" icon={Settings} label="Settings" jp="Settings" />
+        </div>
 
         {/* Dynamic sections from AI */}
         {dynamicSections.length > 0 && (
