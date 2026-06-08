@@ -200,9 +200,10 @@ function getUserSpreadsheetIdUnlocked(userId, email, name) {
     const registryData = registrySheet.getRange(1, 1, lastRow, REGISTRY_SCHEMA.length).getValues();
     for (let i = 1; i < registryData.length; i++) {
       const registryUserId = registryData[i][1].toString();
-      const legacyEmailMatch = !registryUserId &&
-        registryData[i][0].toString().toLowerCase() === email.toLowerCase();
-      if (registryUserId === userId || legacyEmailMatch) {
+      const registryEmailVal = registryData[i][0].toString().toLowerCase();
+      const isMatch = registryUserId === userId || 
+                      registryEmailVal === email.toLowerCase();
+      if (isMatch) {
         userRowIndex = i + 1;
         registryEmail = registryData[i][0].toString();
         spreadsheetId = registryData[i][3].toString();
@@ -219,7 +220,7 @@ function getUserSpreadsheetIdUnlocked(userId, email, name) {
   const todayStr = new Date().toLocaleString('en-IN');
 
   if (userRowIndex !== -1 && spreadsheetId) {
-    registrySheet.getRange(userRowIndex, 2).setValue(userId);
+    registrySheet.getRange(userRowIndex, 2).setValue("'" + userId);
     if (registryEmail.toLowerCase() !== email.toLowerCase()) {
       migrateUserEmail(spreadsheetId, registryEmail, email);
       registrySheet.getRange(userRowIndex, 1).setValue(email);
@@ -271,7 +272,7 @@ function getUserSpreadsheetIdUnlocked(userId, email, name) {
   // Save to master registry
   registrySheet.appendRow(sanitizeRow([
     email,
-    userId,
+    "'" + userId,
     userName,
     newSsId,
     newSsUrl,

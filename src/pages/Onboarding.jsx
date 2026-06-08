@@ -30,7 +30,7 @@ export default function Onboarding() {
   const initialDraft = readOnboardingDraft(state.user) || {};
   const [messages, setMessages] = useState(initialDraft.messages || []);
   const [input, setInput] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!initialDraft.messages || initialDraft.messages.length === 0);
   const [geminiKey, setGeminiKey] = useState(state.geminiKey || '');
   const [keyEntered, setKeyEntered] = useState(true);
   const bottomRef = useRef(null);
