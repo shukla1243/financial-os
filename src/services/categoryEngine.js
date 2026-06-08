@@ -260,7 +260,12 @@ RESPOND ONLY WITH THIS JSON (no markdown, no explanation, no backticks):
       "month": "MMM",
       "year": number,
       "day": "Mon/Tue/etc",
-      "note": "string or empty"
+      "note": "string or empty",
+      "odometer": "number or empty; extract for vehicle/fuel expenses",
+      "pricePerLitre": "number or empty; extract fuel rate per litre",
+      "duration": "number or empty; workout duration in minutes",
+      "doctor": "string or empty; doctor or hospital name",
+      "medicalType": "string or empty; medicine, visit, test, etc."
     }
   ],
   "income": [

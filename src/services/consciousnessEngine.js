@@ -34,8 +34,7 @@ const SECTION_DEFINITIONS = {
       const price = expense.pricePerLitre || 0;
       const litres = price > 0 ? (amt / price).toFixed(2) : '';
       const odo = expense.odometer || '';
-      const today = new Date();
-      return [today.toLocaleDateString('en-IN'), today.toLocaleString('default',{month:'short'}), today.getFullYear(), amt, odo, price, litres, '', expense.note || ''];
+      return [expense.date, expense.month, expense.year, amt, odo, price, litres, '', expense.note || ''];
     },
     metrics: ['Total spent on fuel', 'Avg cost/km', 'Litres filled', 'Fuel efficiency'],
   },
@@ -43,8 +42,7 @@ const SECTION_DEFINITIONS = {
     sheetRef: 'HealthLog',
     headers: ['Date', 'Month', 'Year', 'Activity', 'Duration', 'Cost', 'Streak', 'Note'],
     parseData: (expense) => {
-      const today = new Date();
-      return [today.toLocaleDateString('en-IN'), today.toLocaleString('default',{month:'short'}), today.getFullYear(), expense.description, expense.duration || '', expense.amount || 0, '', expense.note || ''];
+      return [expense.date, expense.month, expense.year, expense.description, expense.duration || '', expense.amount || 0, '', expense.note || ''];
     },
     metrics: ['Workouts this month', 'Cost per session', 'Current streak', 'Total invested in health'],
   },
@@ -52,8 +50,7 @@ const SECTION_DEFINITIONS = {
     sheetRef: 'MedicalLog',
     headers: ['Date', 'Month', 'Year', 'Type', 'Description', 'Amount', 'Doctor', 'Note'],
     parseData: (expense) => {
-      const today = new Date();
-      return [today.toLocaleDateString('en-IN'), today.toLocaleString('default',{month:'short'}), today.getFullYear(), 'Visit', expense.description, expense.amount, '', expense.note || ''];
+      return [expense.date, expense.month, expense.year, expense.medicalType || 'Expense', expense.description, expense.amount, expense.doctor || '', expense.note || ''];
     },
     metrics: ['Medical spend this month', 'Doctor visits', 'Medicine costs', 'Annual health spend'],
   },
@@ -109,6 +106,43 @@ export async function writeToDynamicSheet(proxyUrl, email, sheetName, rowData) {
   await createDynamicSheet(proxyUrl, email, sheetName, headers);
   const result = await appendDynamicRow(proxyUrl, email, sheetName, rowData);
   return result?.success === true;
+}
+
+/**
+ * Route one confirmed expense into every matching specialized OS log.
+ */
+export async function autoLogExpenseToSections(proxyUrl, email, expense, existingSectionIds = []) {
+  if (!proxyUrl || !email || !expense) return [];
+
+  const sectionIds = findTriggeredSectionIds([expense], []);
+  const createdSections = [];
+
+  for (const sectionId of sectionIds) {
+    const trigger = SECTION_TRIGGERS[sectionId];
+    const def = SECTION_DEFINITIONS[sectionId];
+    if (!trigger || !def) continue;
+
+    if (!existingSectionIds.includes(sectionId)) {
+      await writeToBlueprint(proxyUrl, email, {
+        SectionID: sectionId,
+        Name: trigger.name,
+        Icon: trigger.icon,
+        SheetRef: def.sheetRef,
+        Status: 'Active',
+      });
+      createdSections.push({
+        SectionID: sectionId,
+        Name: trigger.name,
+        Icon: trigger.icon,
+        SheetRef: def.sheetRef,
+        Status: 'Active',
+      });
+    }
+
+    await writeToDynamicSheet(proxyUrl, email, def.sheetRef, def.parseData(expense));
+  }
+
+  return createdSections;
 }
 
 export async function readDynamicSheet(proxyUrl, email, sheetName) {

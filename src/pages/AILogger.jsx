@@ -103,6 +103,8 @@ function ExpenseCard({ expense, budgets, onConfirm, onEdit, onCancel, editing, o
             { key: 'amount', label: 'Amount (₹)', type: 'number' },
             { key: 'category', label: 'Category' },
             { key: 'mode', label: 'Payment Mode' },
+            ...(expense.odometer ? [{ key: 'odometer', label: 'Odometer', type: 'number' }] : []),
+            ...(expense.pricePerLitre ? [{ key: 'pricePerLitre', label: 'Fuel Rate', type: 'number' }] : []),
           ].map(({ key, label, type }) => (
             <div key={key} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span style={{ fontSize: '11px', color: 'var(--text-muted)', width: '80px', flexShrink: 0 }}>{label}</span>
@@ -123,6 +125,8 @@ function ExpenseCard({ expense, budgets, onConfirm, onEdit, onCancel, editing, o
             { label: 'Description', value: expense.description },
             { label: 'Amount', value: `₹${expense.amount?.toLocaleString()}`, highlight: true },
             { label: 'Mode', value: expense.mode },
+            ...(expense.odometer ? [{ label: 'Odometer', value: `${expense.odometer} km` }] : []),
+            ...(expense.pricePerLitre ? [{ label: 'Fuel Rate', value: `₹${expense.pricePerLitre}/L` }] : []),
           ].map(({ label, value, highlight }) => (
             <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{label}</span>

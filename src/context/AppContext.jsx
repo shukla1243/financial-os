@@ -14,7 +14,7 @@ import {
   completeOnboarding as proxyCompleteOnboarding,
   saveConfig as proxySaveConfig,
 } from '../services/proxyService';
-import { runConsciousnessScan, readBlueprint } from '../services/consciousnessEngine';
+import { autoLogExpenseToSections, runConsciousnessScan, readBlueprint } from '../services/consciousnessEngine';
 import { resolveAllInvestments } from '../services/walletService';
 import { clearLegacyStorage, getStableUserId, readUserState, writeUserState } from '../services/userStorage';
 import { calculateFinancialHealth } from '../services/financialHealth';
@@ -178,8 +178,10 @@ function reducer(state, action) {
       return { ...state, aiMemory: [...state.aiMemory, { ...action.payload, id: Date.now(), date: new Date().toISOString() }] };
     case 'SET_BLUEPRINT':
       return { ...state, appBlueprint: action.payload };
-    case 'ADD_BLUEPRINT_SECTION':
-      return { ...state, appBlueprint: [...state.appBlueprint, action.payload] };
+    case 'ADD_BLUEPRINT_SECTION': {
+      const exists = state.appBlueprint.some(section => section.SectionID === action.payload.SectionID);
+      return exists ? state : { ...state, appBlueprint: [...state.appBlueprint, action.payload] };
+    }
     case 'ADD_NEW_SECTION_NOTIFICATION':
       return { ...state, newSectionNotifications: [...state.newSectionNotifications, action.payload] };
     case 'CLEAR_NEW_SECTION_NOTIFICATIONS':
@@ -511,8 +513,23 @@ export function AppProvider({ children }) {
           },
         });
       });
+      const existingSectionIds = state.appBlueprint.map(section => section.SectionID);
+      const createdSections = await autoLogExpenseToSections(proxyUrl, email, expenseWithId, existingSectionIds).catch(() => []);
+      createdSections.forEach(section => {
+        dispatch({ type: 'ADD_BLUEPRINT_SECTION', payload: section });
+        dispatch({
+          type: 'ADD_NEW_SECTION_NOTIFICATION',
+          payload: {
+            sectionId: section.SectionID,
+            name: section.Name,
+            icon: section.Icon,
+            sheetRef: section.SheetRef,
+            message: `I built you a ${section.Name} and logged this transaction there too.`,
+          },
+        });
+      });
     }
-  }, [state.sheetsConfig, state.user]);
+  }, [state.sheetsConfig, state.user, state.appBlueprint]);
 
   // ─── DELETE EXPENSE ──────────────────────────────────────────────────────────
   const deleteExpense = useCallback(async (expense) => {

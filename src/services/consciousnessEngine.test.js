@@ -1,4 +1,4 @@
-import { findTriggeredSectionIds } from './consciousnessEngine';
+import { findTriggeredSectionIds, SECTION_DEFINITIONS } from './consciousnessEngine';
 
 test('vehicle expenses trigger Vehicle OS', () => {
   expect(findTriggeredSectionIds([
@@ -22,4 +22,18 @@ test('unsupported trigger definitions do not create broken sections', () => {
   expect(findTriggeredSectionIds([
     { description: 'Read a book', category: 'Education', note: '' },
   ])).not.toContain('reading');
+});
+
+test('vehicle OS row preserves expense date and calculates litres', () => {
+  expect(SECTION_DEFINITIONS.vehicle.parseData({
+    date: '2026-06-06',
+    month: 'Jun',
+    year: 2026,
+    amount: 201,
+    odometer: 9890,
+    pricePerLitre: 114,
+    note: 'Fuel refill',
+  })).toEqual([
+    '2026-06-06', 'Jun', 2026, 201, 9890, 114, '1.76', '', 'Fuel refill',
+  ]);
 });
