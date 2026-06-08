@@ -185,6 +185,7 @@ function getUserSpreadsheetIdUnlocked(userId, email, name) {
     registrySheet.getRange(1, 1, 1, REGISTRY_SCHEMA.length).setValues([REGISTRY_SCHEMA]);
     registrySheet.setFrozenRows(1);
   }
+  ensureRegistrySchema(registrySheet);
 
   const lastRow = registrySheet.getLastRow();
   let userRowIndex = -1;
@@ -193,11 +194,11 @@ function getUserSpreadsheetIdUnlocked(userId, email, name) {
   let registryEmail = '';
 
   if (lastRow >= 2) {
-    const registryData = registrySheet.getRange(1, 1, lastRow, REGISTRY_SCHEMA.length).getValues();
+    const registryData = registrySheet.getRange(1, 1, lastRow, REGISTRY_SCHEMA.length).getDisplayValues();
     for (let i = 1; i < registryData.length; i++) {
-      const registryUserId = registryData[i][1].toString();
-      const registryEmailVal = registryData[i][0].toString().toLowerCase();
-      const isMatch = registryUserId === userId || 
+      const registryUserId = normalizeGoogleSubjectId(registryData[i][1]);
+      const registryEmailVal = registryData[i][0].toString().trim().toLowerCase();
+      const isMatch = registryUserId === normalizeGoogleSubjectId(userId) ||
                       registryEmailVal === email.toLowerCase();
       if (isMatch) {
         userRowIndex = i + 1;
@@ -216,7 +217,7 @@ function getUserSpreadsheetIdUnlocked(userId, email, name) {
   const todayStr = new Date().toLocaleString('en-IN');
 
   if (userRowIndex !== -1 && spreadsheetId) {
-    registrySheet.getRange(userRowIndex, 2).setValue("'" + userId);
+    registrySheet.getRange(userRowIndex, 2).setNumberFormat('@').setValue(normalizeGoogleSubjectId(userId));
     if (registryEmail.toLowerCase() !== email.toLowerCase()) {
       migrateUserEmail(spreadsheetId, registryEmail, email);
       registrySheet.getRange(userRowIndex, 1).setValue(email);
@@ -266,9 +267,11 @@ function getUserSpreadsheetIdUnlocked(userId, email, name) {
   defaults.forEach(row => configSheet.appendRow(sanitizeRow(row)));
 
   // Save to master registry
-  registrySheet.appendRow(sanitizeRow([
+  const newRegistryRow = registrySheet.getLastRow() + 1;
+  registrySheet.getRange(newRegistryRow, 2).setNumberFormat('@');
+  registrySheet.getRange(newRegistryRow, 1, 1, REGISTRY_SCHEMA.length).setValues([sanitizeRow([
     email,
-    "'" + userId,
+    normalizeGoogleSubjectId(userId),
     userName,
     newSsId,
     newSsUrl,
@@ -276,9 +279,32 @@ function getUserSpreadsheetIdUnlocked(userId, email, name) {
     todayStr,
     todayStr,
     ''
-  ]));
+  ])]);
 
   return newSsId;
+}
+
+function ensureRegistrySchema(registrySheet) {
+  const lastRow = registrySheet.getLastRow();
+  if (lastRow === 0) {
+    registrySheet.getRange(1, 1, 1, REGISTRY_SCHEMA.length).setValues([REGISTRY_SCHEMA]);
+    registrySheet.setFrozenRows(1);
+    return;
+  }
+  const firstRow = registrySheet.getRange(1, 1, 1, REGISTRY_SCHEMA.length).getDisplayValues()[0];
+  const hasHeader = firstRow[0] === 'Email' && firstRow[1] === 'UserID' && firstRow[3] === 'SpreadsheetID';
+  if (!hasHeader) {
+    registrySheet.insertRowBefore(1);
+    registrySheet.getRange(1, 1, 1, REGISTRY_SCHEMA.length).setValues([REGISTRY_SCHEMA]);
+  }
+  registrySheet.setFrozenRows(1);
+  if (registrySheet.getLastRow() >= 2) {
+    registrySheet.getRange(2, 2, registrySheet.getLastRow() - 1, 1).setNumberFormat('@');
+  }
+}
+
+function normalizeGoogleSubjectId(value) {
+  return String(value || '').trim().replace(/^'+/, '');
 }
 
 function migrateUserEmail(ssId, oldEmail, newEmail) {
