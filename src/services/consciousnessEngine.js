@@ -11,6 +11,7 @@
 
 import { readBlueprint as proxyReadBlueprint, writeToBlueprint as proxyWriteToBlueprint } from './proxyService';
 import { callAI } from './aiService';
+import { sanitizeAITextForDisplay } from './aiOutputGuard';
 
 // Known OS section triggers
 const SECTION_TRIGGERS = {
@@ -220,7 +221,10 @@ Format: just the insight text, nothing else.`;
       temperature: 0.7,
       maxTokens: 150,
     });
-    return data.candidates?.[0]?.content?.parts?.[0]?.text || null;
+    return sanitizeAITextForDisplay(
+      data.candidates?.[0]?.content?.parts?.[0]?.text,
+      ''
+    ) || null;
   } catch (e) { return null; }
 }
 

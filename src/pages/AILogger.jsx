@@ -3,6 +3,7 @@ import { useApp } from '../context/AppContext';
 import { buildDynamicSystemPrompt, parseExpensesForNewCategories, suggestNewCategory } from '../services/categoryEngine';
 import { Send, Camera, Check, X, Edit3, Loader, Zap, Plus } from 'lucide-react';
 import { callAI } from '../services/aiService';
+import { sanitizeAITextForDisplay } from '../services/aiOutputGuard';
 
 function getCatIcon(cat) {
   const iconMap = {
@@ -449,7 +450,10 @@ export default function AILogger() {
         return;
       }
       if (result.needsClarification) {
-        setMessages(prev => [...prev, { role: 'ai', text: result.clarificationQuestion }]);
+        setMessages(prev => [...prev, {
+          role: 'ai',
+          text: sanitizeAITextForDisplay(result.clarificationQuestion),
+        }]);
         return;
       }
 

@@ -5,6 +5,7 @@ import { callAI } from '../services/aiService';
 import { generateThemeFromVibe, normalizeTheme, personalizeTheme, THEME_PRESETS } from '../services/themeEngine';
 import { clearOnboardingDraft, readOnboardingDraft, writeOnboardingDraft } from '../services/userStorage';
 import { extractJsonObject } from '../services/aiJson';
+import { containsInternalAILeak, sanitizeAITextForDisplay } from '../services/aiOutputGuard';
 
 const AI_UNAVAILABLE = "I'm having trouble reaching AI services right now";
 const isTransientAIMessage = text => {
@@ -16,10 +17,16 @@ const isTransientAIMessage = text => {
     value.includes('overloaded');
 };
 const cleanDisplayMessages = messages => (messages || []).filter(
-  message => message.role === 'user' || !isTransientAIMessage(message.text)
-);
+  message => message.role === 'user' || (!isTransientAIMessage(message.text) && !containsInternalAILeak(message.text))
+).map(message => message.role === 'user' ? message : {
+  ...message,
+  text: sanitizeAITextForDisplay(message.text),
+});
 const cleanConversation = conversation => (conversation || []).filter(
-  message => !isTransientAIMessage(message.parts?.[0]?.text || message.content || message.text)
+  message => {
+    const text = message.parts?.[0]?.text || message.content || message.text;
+    return !isTransientAIMessage(text) && !containsInternalAILeak(text);
+  }
 );
 
 const ONBOARDING_PROMPT = `You are onboarding a user to their personal Financial OS app. Have a warm, natural anime-themed conversation to learn about them.
@@ -67,7 +74,7 @@ export default function Onboarding() {
       callGemini('', [{ role: 'user', parts: [{ text: 'Start the onboarding.' }] }])
         .then(aiMsg => {
           conversationRef.current = [{ role: 'model', parts: [{ text: aiMsg }] }];
-          setMessages([{ role: 'ai', text: aiMsg }]);
+          setMessages([{ role: 'ai', text: sanitizeAITextForDisplay(aiMsg) }]);
         })
         .catch((e) => {
           console.error("Failed to auto-start onboarding chat:", e);
@@ -100,7 +107,7 @@ export default function Onboarding() {
     try {
       const aiMsg = await callGemini(geminiKey, [{ role: 'user', parts: [{ text: 'Start the onboarding.' }] }]);
       conversationRef.current = [{ role: 'model', parts: [{ text: aiMsg }] }];
-      setMessages([{ role: 'ai', text: aiMsg }]);
+      setMessages([{ role: 'ai', text: sanitizeAITextForDisplay(aiMsg) }]);
     } catch (e) {
       setKeyEntered(false);
       const msg = e.message || '';
@@ -183,7 +190,7 @@ export default function Onboarding() {
         await completeOnboarding(profile);
         clearOnboardingDraft(state.user);
       } else {
-        setMessages(prev => [...prev, { role: 'ai', text: aiText }]);
+        setMessages(prev => [...prev, { role: 'ai', text: sanitizeAITextForDisplay(aiText) }]);
       }
     } catch (e) {
       const msg = e.message || '';

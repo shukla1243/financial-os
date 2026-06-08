@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { Send, Bot, User, Sparkles, TrendingUp, HelpCircle, Target, Calendar } from 'lucide-react';
 import { callAI } from '../services/aiService';
+import { sanitizeAITextForDisplay } from '../services/aiOutputGuard';
 
 const QUICK_PROMPTS = [
   { icon: '📊', text: 'Am I on track this month?' },
@@ -152,7 +153,10 @@ Answer the user's question with specific numbers and actionable insights. Keep r
         maxTokens: 600,
         key: state.geminiKey,
       });
-      const aiText = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Something went wrong.';
+      const aiText = sanitizeAITextForDisplay(
+        data.candidates?.[0]?.content?.parts?.[0]?.text,
+        'I could not produce a safe answer. Please ask that again.'
+      );
       setMessages(prev => [...prev, { role: 'ai', text: aiText }]);
     } catch (e) {
       const isOverload = e.message?.toLowerCase().includes('overloaded') || e.message?.includes('503');

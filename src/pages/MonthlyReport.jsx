@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { callAI } from '../services/aiService';
+import { sanitizeAITextForDisplay } from '../services/aiOutputGuard';
 import { FileText, Calendar, Printer, TrendingUp, Cpu, Award } from 'lucide-react';
 
 export default function MonthlyReport() {
@@ -71,7 +72,10 @@ Rules:
         key: state.geminiKey,
         temperature: 0.75
       });
-      const text = response.candidates?.[0]?.content?.parts?.[0]?.text || 'No critique generated.';
+      const text = sanitizeAITextForDisplay(
+        response.candidates?.[0]?.content?.parts?.[0]?.text,
+        'No critique generated.'
+      );
       setCritique(text);
     } catch (e) {
       console.error(e);
