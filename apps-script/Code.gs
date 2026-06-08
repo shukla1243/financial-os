@@ -17,11 +17,11 @@ const ADMIN_EMAIL = PropertiesService.getScriptProperties().getProperty('ADMIN_E
 const GOOGLE_CLIENT_ID = PropertiesService.getScriptProperties().getProperty('GOOGLE_CLIENT_ID') || '';
 const OPENROUTER_API_KEY = PropertiesService.getScriptProperties().getProperty('OPENROUTER_API_KEY') || '';
 const OPENROUTER_MODELS = [
-  'google/gemini-2.5-flash-lite',
-  'google/gemini-2.0-flash-exp',
-  'meta-llama/llama-3.1-8b-instruct',
-  'microsoft/phi-3-mini-128k-instruct',
-  'qwen/qwen2-7b-instruct',
+  'google/gemini-2.5-flash:free',
+  'meta-llama/llama-3.3-70b-instruct:free',
+  'google/gemini-2.5-pro:free',
+  'qwen/qwen-2.5-7b-instruct:free',
+  'meta-llama/llama-3.1-8b-instruct:free',
 ];
 const ALLOWED_ACTIONS = [
   'initUser', 'getUserStatus', 'getAdminRegistry', 'toggleUserStatus',
@@ -602,11 +602,15 @@ function callAI(email, request) {
       });
       const data = JSON.parse(response.getContentText() || '{}');
       const content = String(data.choices?.[0]?.message?.content || '').trim();
-      if (response.getResponseCode() >= 200 && response.getResponseCode() < 300 && content) {
+      const code = response.getResponseCode();
+      if (code >= 200 && code < 300 && content) {
         return { success: true, content, model: models[i] };
+      } else {
+        console.error("OpenRouter model " + models[i] + " failed with code " + code + ": " + response.getContentText());
       }
-    } catch (error) {}
-    if (i < models.length - 1) Utilities.sleep(Math.min(4000, 500 * Math.pow(2, i)));
+    } catch (error) {
+      console.error("OpenRouter request failed for " + models[i] + ": " + error.toString());
+    }
   }
   return {
     success: true,

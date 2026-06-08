@@ -69,7 +69,7 @@ export default function Onboarding() {
         key,
       });
       const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-      if (text && !text.includes(AI_UNAVAILABLE)) return text;
+      if (text) return text;
     }
     throw new Error('AI is temporarily unavailable. Your onboarding progress has been saved.');
   };
