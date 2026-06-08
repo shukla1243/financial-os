@@ -121,7 +121,6 @@ function Topbar() {
 function ThemeEffects() {
   const { state } = useApp();
   const theme = state.config?.theme;
-  const [deviceMode, setDeviceMode] = useState(() => window.matchMedia('(max-width: 760px)').matches ? 'mobile' : 'desktop');
   const decorations = theme?.decorations || 'none';
 
   if (['shadow-particles', 'neon-city', 'crimson-clouds', 'water-ripples', 'hud-grid'].includes(decorations)) {
@@ -221,6 +220,7 @@ import useInjectLogout from './hooks/useInjectLogout';
 function AppShell() {
   const { state, dispatch } = useApp();
   const theme = state.config?.theme;
+  const [deviceMode, setDeviceMode] = useState(() => window.matchMedia('(max-width: 760px)').matches ? 'mobile' : 'desktop');
   const [publicView, setPublicView] = useState(() => sessionStorage.getItem('financial_os_entered') === 'true' ? 'app' : 'landing');
 
   // Run dynamic logout button injection
