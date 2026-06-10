@@ -4,6 +4,7 @@ import { buildDynamicSystemPrompt, parseExpensesForNewCategories, suggestNewCate
 import { Send, Camera, Check, X, Edit3, Loader, Zap, Plus } from 'lucide-react';
 import { callAI } from '../services/aiService';
 import { sanitizeAITextForDisplay } from '../services/aiOutputGuard';
+import { extractJsonObject } from '../services/aiJson';
 
 function getCatIcon(cat) {
   const iconMap = {
@@ -421,7 +422,23 @@ export default function AILogger() {
         key: state.geminiKey,
       });
       const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-      return JSON.parse(raw.replace(/```json|```/g, '').trim());
+      try {
+        return extractJsonObject(raw);
+      } catch (parseError) {
+        const retryData = await callAI({
+          systemInstruction: `${systemPrompt}\n\nCRITICAL RETRY: The previous response was not valid JSON. Return only the required JSON object. Do not say that anything was logged.`,
+          contents: [...contents, { role: 'assistant', content: raw }, { role: 'user', content: 'Return the requested action as valid JSON only.' }],
+          temperature: 0,
+          maxTokens: 1000,
+          key: state.geminiKey,
+        });
+        const retryRaw = retryData.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        try {
+          return extractJsonObject(retryRaw);
+        } catch (retryParseError) {
+          return { error: 'AI returned a chat reply instead of structured transaction data. Nothing was logged. Please try again.' };
+        }
+      }
     } catch (e) {
       return { error: e.message };
     }

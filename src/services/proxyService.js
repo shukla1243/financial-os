@@ -56,6 +56,12 @@ async function proxyPost(proxyUrl, action, email, data = null) {
   return result;
 }
 
+async function proxyMutation(proxyUrl, action, email, data = null) {
+  const result = await proxyPost(proxyUrl, action, email, data);
+  if (!result?.success) throw new Error(result?.error || `${action} was not confirmed by the backend.`);
+  return result;
+}
+
 // ─── USER INIT ───────────────────────────────────────────────────────────────
 
 /**
@@ -91,7 +97,7 @@ export async function readConfig(proxyUrl, email) {
 }
 
 export async function upsertConfig(proxyUrl, email, key, value) {
-  return proxyPost(proxyUrl, 'setConfig', email, { key, value: value.toString() });
+  return proxyMutation(proxyUrl, 'setConfig', email, { key, value: value.toString() });
 }
 
 export async function saveConfig(proxyUrl, email, values) {
@@ -140,11 +146,11 @@ export async function addCategory(proxyUrl, email, categoryName, budget = 0) {
 // ─── EXPENSES ────────────────────────────────────────────────────────────────
 
 export async function logExpense(proxyUrl, email, expense) {
-  return proxyPost(proxyUrl, 'logExpense', email, expense);
+  return proxyMutation(proxyUrl, 'logExpense', email, expense);
 }
 
 export async function deleteExpense(proxyUrl, email, expense) {
-  return proxyPost(proxyUrl, 'deleteExpense', email, expense);
+  return proxyMutation(proxyUrl, 'deleteExpense', email, expense);
 }
 
 
@@ -156,7 +162,7 @@ export async function readExpenses(proxyUrl, email) {
 // ─── INCOME ──────────────────────────────────────────────────────────────────
 
 export async function logIncome(proxyUrl, email, income) {
-  return proxyPost(proxyUrl, 'logIncome', email, income);
+  return proxyMutation(proxyUrl, 'logIncome', email, income);
 }
 
 export async function readIncome(proxyUrl, email) {
@@ -167,7 +173,7 @@ export async function readIncome(proxyUrl, email) {
 // ─── SAVINGS GOALS ───────────────────────────────────────────────────────────
 
 export async function writeGoals(proxyUrl, email, goals) {
-  return proxyPost(proxyUrl, 'setGoals', email, goals);
+  return proxyMutation(proxyUrl, 'setGoals', email, goals);
 }
 
 export async function readGoals(proxyUrl, email) {
@@ -178,7 +184,7 @@ export async function readGoals(proxyUrl, email) {
 // ─── BILL CALENDAR ───────────────────────────────────────────────────────────
 
 export async function writeBills(proxyUrl, email, bills) {
-  return proxyPost(proxyUrl, 'setBills', email, bills);
+  return proxyMutation(proxyUrl, 'setBills', email, bills);
 }
 
 export async function readBills(proxyUrl, email) {

@@ -22,6 +22,8 @@ import { calculateFinancialHealth } from '../services/financialHealth';
 import { isValidMemoryObservation } from '../services/memoryGuard';
 import { restoreAuthenticatedUser } from '../services/googleAuth';
 import { chooseLatestTheme, normalizeTheme } from '../services/themeEngine';
+import { normalizeExpense, normalizeIncome } from '../services/transactionNormalizer';
+import { flushSyncOutbox, queueSyncOperation } from '../services/syncOutbox';
 
 const AppContext = createContext();
 
@@ -324,6 +326,24 @@ export function AppProvider({ children }) {
   const autoInitRef = useRef('');
   const lastDriveUpdateRef = useRef(0);
   const writeTimerRef = useRef(null);
+  const flushPendingWrites = useCallback(async (proxyUrl, email, userId) => {
+    const result = await flushSyncOutbox(proxyUrl, email, userId);
+    if (result.synced > 0) {
+      dispatch({
+        type: 'ADD_NOTIFICATION',
+        payload: { type: 'success', message: `${result.synced} pending change${result.synced === 1 ? '' : 's'} synced to Sheets.` },
+      });
+    }
+    return result;
+  }, []);
+  const queueFailedWrite = useCallback((type, payload, label) => {
+    const userId = getStableUserId(state.user);
+    if (userId) queueSyncOperation(userId, type, payload);
+    dispatch({
+      type: 'ADD_NOTIFICATION',
+      payload: { type: 'error', message: `${label} saved locally. Sheets sync failed, so it was added to the retry queue.` },
+    });
+  }, [state.user]);
 
   useEffect(() => {
     let active = true;
@@ -396,6 +416,13 @@ export function AppProvider({ children }) {
         dispatch({ type: 'SET_SHEETS_CONFIG', payload: { proxyUrl: PROXY_URL, connected: true } });
         // Sync all data from backend
         dispatch({ type: 'SET_SYNC_STATUS', payload: { status: 'syncing' } });
+        const pendingResult = await flushPendingWrites(PROXY_URL, email, userId);
+        if (pendingResult.remaining.length > 0) {
+          dispatch({ type: 'SET_SYNC_STATUS', payload: { status: 'error' } });
+          dispatch({ type: 'SET_SESSION_READY', payload: true });
+          dispatch({ type: 'SET_INITIALIZATION_ERROR', payload: 'Pending local changes could not reach Sheets yet. Server refresh is paused to protect them.' });
+          return;
+        }
         const data = await loadAllFromProxy(PROXY_URL, email);
         if (data.success) {
           if (data.config?.ThemeJSON) {
@@ -430,7 +457,7 @@ export function AppProvider({ children }) {
     };
 
     autoInit();
-  }, [state.sessionEntryAllowed, state.user?.sub, state.user?.email]);
+  }, [state.sessionEntryAllowed, state.user?.sub, state.user?.email, flushPendingWrites]);
 
   // Save only to the authenticated user's scoped cache.
   useEffect(() => {
@@ -496,6 +523,9 @@ export function AppProvider({ children }) {
   const syncFromSheets = useCallback(async (proxyUrl, email) => {
     dispatch({ type: 'SET_SYNC_STATUS', payload: { status: 'syncing' } });
     try {
+      const userId = getStableUserId(state.user);
+      const pendingResult = await flushPendingWrites(proxyUrl, email, userId);
+      if (pendingResult.remaining.length > 0) throw new Error('Pending local changes could not sync. Server refresh was paused to protect them.');
       const data = await loadAllFromProxy(proxyUrl, email);
       if (!data.success) throw new Error(data.error || 'Sync failed');
       const statusRes = await getUserStatus(proxyUrl, email).catch(() => null);
@@ -517,7 +547,7 @@ export function AppProvider({ children }) {
       dispatch({ type: 'SET_SYNC_STATUS', payload: { status: 'error' } });
       return { success: false, error: e.message };
     }
-  }, [state.notifications]);
+  }, [state.notifications, state.user, flushPendingWrites]);
 
   // ─── AUTO-SYNC POLLER ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -527,9 +557,12 @@ export function AppProvider({ children }) {
 
     const intervalId = setInterval(async () => {
       try {
+        const userId = getStableUserId(state.user);
+        const pendingResult = await flushPendingWrites(proxyUrl, email, userId);
+        if (pendingResult.remaining.length > 0) return;
         const res = await proxyCheckUpdates(proxyUrl, email);
         if (res.success && res.lastUpdated) {
-          if (lastDriveUpdateRef.current !== 0 && res.lastUpdated > lastDriveUpdateRef.current) {
+          if (pendingResult.synced > 0 || (lastDriveUpdateRef.current !== 0 && res.lastUpdated > lastDriveUpdateRef.current)) {
             await syncFromSheets(proxyUrl, email);
           }
           lastDriveUpdateRef.current = res.lastUpdated;
@@ -540,27 +573,20 @@ export function AppProvider({ children }) {
     }, 15000);
 
     return () => clearInterval(intervalId);
-  }, [state.sheetsConfig?.connected, state.sheetsConfig?.proxyUrl, state.user?.email, syncFromSheets]);
+  }, [state.sheetsConfig?.connected, state.sheetsConfig?.proxyUrl, state.user, syncFromSheets, flushPendingWrites]);
 
   // ─── ADD EXPENSE ─────────────────────────────────────────────────────────────
   const addExpense = useCallback(async (expense) => {
-    const expenseWithId = { ...expense, id: expense.id || Date.now() };
+    const expenseWithId = normalizeExpense(expense);
     dispatch({ type: 'ADD_EXPENSE', payload: expenseWithId });
     dispatch({ type: 'ADD_XP', payload: 10 });
     const { proxyUrl, connected } = state.sheetsConfig;
     const email = state.user?.email;
     if (connected && proxyUrl && email) {
-      await proxyLogExpense(proxyUrl, email, expenseWithId).catch(() => {
-        dispatch({
-          type: 'ADD_NOTIFICATION',
-          payload: {
-            type: 'error',
-            message: '⚠️ Expense saved locally but sheet sync failed. It will retry on next sync.',
-          },
-        });
-      });
+      const synced = await proxyLogExpense(proxyUrl, email, expenseWithId).then(() => true).catch(() => false);
       const existingSectionIds = state.appBlueprint.map(section => section.SectionID);
-      const createdSections = await autoLogExpenseToSections(proxyUrl, email, expenseWithId, existingSectionIds).catch(() => []);
+      if (!synced) queueFailedWrite('expense', expenseWithId, 'Expense');
+      const createdSections = synced ? await autoLogExpenseToSections(proxyUrl, email, expenseWithId, existingSectionIds).catch(() => []) : [];
       createdSections.forEach(section => {
         dispatch({ type: 'ADD_BLUEPRINT_SECTION', payload: section });
         dispatch({
@@ -574,8 +600,8 @@ export function AppProvider({ children }) {
           },
         });
       });
-    }
-  }, [state.sheetsConfig, state.user, state.appBlueprint]);
+    } else queueFailedWrite('expense', expenseWithId, 'Expense');
+  }, [state.sheetsConfig, state.user, state.appBlueprint, queueFailedWrite]);
 
   // ─── DELETE EXPENSE ──────────────────────────────────────────────────────────
   const deleteExpense = useCallback(async (expense) => {
@@ -584,50 +610,21 @@ export function AppProvider({ children }) {
     const { proxyUrl, connected } = state.sheetsConfig;
     const email = state.user?.email;
     if (connected && proxyUrl && email) {
-      try {
-        const result = await proxyDeleteExpense(proxyUrl, email, expense);
-        if (!result?.success) {
-          console.error('Sheet delete failed:', result);
-          dispatch({
-            type: 'ADD_NOTIFICATION',
-            payload: {
-              type: 'error',
-              message: `⚠️ Deleted locally but sheet sync failed: ${result?.error || 'Unknown error'}`,
-            },
-          });
-        }
-      } catch (err) {
-        console.error('deleteExpense network error:', err);
-        dispatch({
-          type: 'ADD_NOTIFICATION',
-          payload: {
-            type: 'error',
-            message: `⚠️ Deleted locally but could not reach sheet: ${err.message}`,
-          },
-        });
-      }
-    }
-  }, [state.sheetsConfig, state.user]);
+      await proxyDeleteExpense(proxyUrl, email, expense).catch(() => queueFailedWrite('deleteExpense', expense, 'Expense deletion'));
+    } else queueFailedWrite('deleteExpense', expense, 'Expense deletion');
+  }, [state.sheetsConfig, state.user, queueFailedWrite]);
 
   // ─── ADD INCOME ──────────────────────────────────────────────────────────────
   const addIncome = useCallback(async (incomeItem) => {
-    const incomeWithId = { ...incomeItem, id: incomeItem.id || Date.now() };
+    const incomeWithId = normalizeIncome(incomeItem);
     dispatch({ type: 'ADD_INCOME', payload: incomeWithId });
     dispatch({ type: 'ADD_XP', payload: 10 });
     const { proxyUrl, connected } = state.sheetsConfig;
     const email = state.user?.email;
     if (connected && proxyUrl && email) {
-      await proxyLogIncome(proxyUrl, email, incomeWithId).catch(() => {
-        dispatch({
-          type: 'ADD_NOTIFICATION',
-          payload: {
-            type: 'error',
-            message: '⚠️ Income saved locally but sheet sync failed. It will retry on next sync.',
-          },
-        });
-      });
-    }
-  }, [state.sheetsConfig, state.user]);
+      await proxyLogIncome(proxyUrl, email, incomeWithId).catch(() => queueFailedWrite('income', incomeWithId, 'Income'));
+    } else queueFailedWrite('income', incomeWithId, 'Income');
+  }, [state.sheetsConfig, state.user, queueFailedWrite]);
 
   // ─── ADD GOAL ─────────────────────────────────────────────────────────────
   const addGoal = useCallback(async (goal) => {
@@ -638,17 +635,9 @@ export function AppProvider({ children }) {
     const email = state.user?.email;
     if (connected && proxyUrl && email) {
       const updatedGoals = [...state.savingsGoals, newGoal];
-      await writeGoals(proxyUrl, email, updatedGoals).catch(() => {
-        dispatch({
-          type: 'ADD_NOTIFICATION',
-          payload: {
-            type: 'error',
-            message: '⚠️ Goal saved locally but sheet sync failed. It will retry on next sync.',
-          },
-        });
-      });
-    }
-  }, [state.sheetsConfig, state.user, state.savingsGoals]);
+      await writeGoals(proxyUrl, email, updatedGoals).catch(() => queueFailedWrite('goals', updatedGoals, 'Goal'));
+    } else queueFailedWrite('goals', [...state.savingsGoals, newGoal], 'Goal');
+  }, [state.sheetsConfig, state.user, state.savingsGoals, queueFailedWrite]);
 
   // ─── UPDATE GOAL ─────────────────────────────────────────────────────────────
   const updateGoal = useCallback(async (goal) => {
@@ -657,17 +646,19 @@ export function AppProvider({ children }) {
     const email = state.user?.email;
     if (connected && proxyUrl && email) {
       const updatedGoals = state.savingsGoals.map(g => g.id === goal.id ? { ...g, ...goal } : g);
-      await writeGoals(proxyUrl, email, updatedGoals).catch(() => {});
-    }
-  }, [state.sheetsConfig, state.user, state.savingsGoals]);
+      await writeGoals(proxyUrl, email, updatedGoals).catch(() => queueFailedWrite('goals', updatedGoals, 'Goal update'));
+    } else queueFailedWrite('goals', state.savingsGoals.map(g => g.id === goal.id ? { ...g, ...goal } : g), 'Goal update');
+  }, [state.sheetsConfig, state.user, state.savingsGoals, queueFailedWrite]);
 
   const deleteGoal = useCallback(async (goalId) => {
     const updatedGoals = state.savingsGoals.filter(goal => goal.id !== goalId);
     dispatch({ type: 'DELETE_GOAL', payload: goalId });
     const { proxyUrl, connected } = state.sheetsConfig;
     const email = state.user?.email;
-    if (connected && proxyUrl && email) await writeGoals(proxyUrl, email, updatedGoals);
-  }, [state.sheetsConfig, state.user, state.savingsGoals]);
+    if (connected && proxyUrl && email) {
+      await writeGoals(proxyUrl, email, updatedGoals).catch(() => queueFailedWrite('goals', updatedGoals, 'Goal deletion'));
+    } else queueFailedWrite('goals', updatedGoals, 'Goal deletion');
+  }, [state.sheetsConfig, state.user, state.savingsGoals, queueFailedWrite]);
 
   // ─── UPDATE BILL ─────────────────────────────────────────────────────────────
   const updateBill = useCallback(async (bill) => {
@@ -676,9 +667,9 @@ export function AppProvider({ children }) {
     const email = state.user?.email;
     if (connected && proxyUrl && email) {
       const updatedBills = state.billCalendar.map(b => b.id === bill.id ? { ...b, ...bill } : b);
-      await writeBills(proxyUrl, email, updatedBills).catch(() => {});
-    }
-  }, [state.sheetsConfig, state.user, state.billCalendar]);
+      await writeBills(proxyUrl, email, updatedBills).catch(() => queueFailedWrite('bills', updatedBills, 'Bill update'));
+    } else queueFailedWrite('bills', state.billCalendar.map(b => b.id === bill.id ? { ...b, ...bill } : b), 'Bill update');
+  }, [state.sheetsConfig, state.user, state.billCalendar, queueFailedWrite]);
 
   // ─── ADD NEW CATEGORY (self-writing) ────────────────────────────────────────
   const addNewCategory = useCallback(async (categoryName, budget = 0) => {
@@ -686,17 +677,9 @@ export function AppProvider({ children }) {
     const { proxyUrl, connected } = state.sheetsConfig;
     const email = state.user?.email;
     if (connected && proxyUrl && email) {
-      await proxyAddCategory(proxyUrl, email, categoryName, budget).catch(() => {
-        dispatch({
-          type: 'ADD_NOTIFICATION',
-          payload: {
-            type: 'error',
-            message: '⚠️ Category added locally but sheet sync failed. It will retry on next sync.',
-          },
-        });
-      });
-    }
-  }, [state.sheetsConfig, state.user]);
+      await proxyAddCategory(proxyUrl, email, categoryName, budget).catch(() => queueFailedWrite('category', { id: categoryName, name: categoryName, budget }, 'Category'));
+    } else queueFailedWrite('category', { id: categoryName, name: categoryName, budget }, 'Category');
+  }, [state.sheetsConfig, state.user, queueFailedWrite]);
 
   // ─── ADD AI MEMORY FACT ──────────────────────────────────────────────────────
   const addMemoryFact = useCallback(async (observation, type = 'user_profile') => {

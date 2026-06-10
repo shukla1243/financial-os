@@ -34,8 +34,8 @@ const FOLDER_NAME = 'Financial OS User Sheets';
 // ─── SHEET SCHEMAS ────────────────────────────────────────────────────────────
 const SCHEMAS = {
   Config:          ['Email', 'Key', 'Value'],
-  Tracker:         ['Email', 'Month', 'Year', 'Day', 'Date', 'Category', 'Description', 'Amount', 'Mode', 'Note'],
-  Income:          ['Email', 'Month', 'Year', 'Date', 'Type', 'Source', 'Amount', 'Note'],
+  Tracker:         ['Email', 'Month', 'Year', 'Day', 'Date', 'Category', 'Description', 'Amount', 'Mode', 'Note', 'ClientID'],
+  Income:          ['Email', 'Month', 'Year', 'Date', 'Type', 'Source', 'Amount', 'Note', 'ClientID'],
   Investments:     ['Email', 'Date', 'Type', 'Fund_Coin', 'Units', 'BuyPrice', 'CurrentValue', 'Platform', 'Note'],
   SavingsGoals:    ['Email', 'ID', 'GoalName', 'Target', 'Saved', 'MonthlyAdd', 'Deadline', 'Icon', 'Color', 'Status'],
   MonthlySnapshot: ['Email', 'Month', 'Year', 'Income', 'ExtraIncome', 'Expenses', 'Savings', 'Buffer', 'SavingsRate', 'TopCategory', 'Notes'],
@@ -389,6 +389,12 @@ function ensureSheet(ss, sheetName) {
   if (firstCell !== 'Email') {
     sheet.insertColumnBefore(1);
     sheet.getRange(1, 1).setValue('Email');
+  }
+  if (headers) {
+    const existingHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getDisplayValues()[0];
+    headers.forEach((header, index) => {
+      if (existingHeaders[index] !== header) sheet.getRange(1, index + 1).setValue(header);
+    });
   }
   return sheet;
 }
@@ -746,7 +752,7 @@ function getExpenses(ssId, email) {
       month: obj.Month, year: parseInt(obj.Year) || new Date().getFullYear(),
       day: obj.Day, date: formatDateString(obj.Date), category: obj.Category,
       description: obj.Description, amount: parseFloat(obj.Amount) || 0,
-      mode: obj.Mode, note: obj.Note,
+      mode: obj.Mode, note: obj.Note, id: obj.ClientID || '',
     }));
     return { success: true, data };
   } catch (err) {
@@ -756,14 +762,38 @@ function getExpenses(ssId, email) {
 
 function logExpense(ssId, email, expense) {
   try {
+    const normalized = normalizeExpenseRecord(expense);
+    if (normalized.id) {
+      const duplicate = readUserRows(ssId, 'Tracker', email).some(({ obj }) => String(obj.ClientID || '') === normalized.id);
+      if (duplicate) return { success: true, duplicate: true };
+    }
     return appendUserRow(ssId, 'Tracker', email, [
-      expense.month, expense.year, expense.day, expense.date,
-      expense.category, expense.description, expense.amount,
-      expense.mode, expense.note || '',
+      normalized.month, normalized.year, normalized.day, normalized.date,
+      normalized.category, normalized.description, normalized.amount,
+      normalized.mode, normalized.note, normalized.id,
     ]);
   } catch (err) {
     return { success: false, error: err.toString() };
   }
+}
+
+function normalizeExpenseRecord(expense) {
+  const now = new Date();
+  const rawDate = String(expense.date || '');
+  const parsed = rawDate ? new Date(rawDate + (rawDate.indexOf('T') === -1 ? 'T00:00:00' : '')) : now;
+  const date = isNaN(parsed.getTime()) ? now : parsed;
+  return {
+    id: String(expense.id || expense.ClientID || ''),
+    date: Utilities.formatDate(date, Session.getScriptTimeZone(), 'yyyy-MM-dd'),
+    month: Utilities.formatDate(date, Session.getScriptTimeZone(), 'MMM'),
+    year: Number(Utilities.formatDate(date, Session.getScriptTimeZone(), 'yyyy')),
+    day: Utilities.formatDate(date, Session.getScriptTimeZone(), 'EEE'),
+    category: expense.category || '',
+    description: expense.description || '',
+    amount: Number(expense.amount) || 0,
+    mode: expense.mode || '',
+    note: expense.note || '',
+  };
 }
 
 function formatDateString(val) {
@@ -796,11 +826,13 @@ function deleteExpense(ssId, email, expense) {
     const amountIdx = headers.indexOf('Amount');
     const descIdx = headers.indexOf('Description');
     const catIdx = headers.indexOf('Category');
+    const clientIdIdx = headers.indexOf('ClientID');
 
     const expDateStr = formatDateString(expense.date || expense.Date || '');
     const expAmount = parseFloat(expense.amount || expense.Amount || 0);
     const expDesc = (expense.description || expense.Description || '').toString().toLowerCase().trim();
     const expCat = (expense.category || expense.Category || '').toString().toLowerCase().trim();
+    const expClientId = String(expense.id || expense.ClientID || '');
 
     for (let i = allData.length - 1; i >= 1; i--) {
       const row = allData[i];
@@ -810,10 +842,11 @@ function deleteExpense(ssId, email, expense) {
         const rowDesc = (row[descIdx] || '').toString().toLowerCase().trim();
         const rowCat = (row[catIdx] || '').toString().toLowerCase().trim();
 
-        if (rowDateStr === expDateStr &&
+        if ((expClientId && clientIdIdx !== -1 && String(row[clientIdIdx] || '') === expClientId) ||
+            (rowDateStr === expDateStr &&
             Math.abs(rowAmount - expAmount) < 0.01 &&
             rowDesc === expDesc &&
-            rowCat === expCat) {
+            rowCat === expCat)) {
           sheet.deleteRow(i + 1);
           return { success: true };
         }
@@ -831,7 +864,7 @@ function getIncome(ssId, email) {
     const data = rows.map(({ obj }) => ({
       month: obj.Month, year: parseInt(obj.Year), date: obj.Date,
       type: obj.Type, source: obj.Source,
-      amount: parseFloat(obj.Amount) || 0, note: obj.Note,
+      amount: parseFloat(obj.Amount) || 0, note: obj.Note, id: obj.ClientID || '',
     }));
     return { success: true, data };
   } catch (err) {
@@ -841,9 +874,14 @@ function getIncome(ssId, email) {
 
 function logIncome(ssId, email, income) {
   try {
+    const clientId = String(income.id || income.ClientID || '');
+    if (clientId) {
+      const duplicate = readUserRows(ssId, 'Income', email).some(({ obj }) => String(obj.ClientID || '') === clientId);
+      if (duplicate) return { success: true, duplicate: true };
+    }
     return appendUserRow(ssId, 'Income', email, [
       income.month, income.year, income.date,
-      income.type, income.source, income.amount, income.note || '',
+      income.type, income.source, income.amount, income.note || '', clientId,
     ]);
   } catch (err) {
     return { success: false, error: err.toString() };
