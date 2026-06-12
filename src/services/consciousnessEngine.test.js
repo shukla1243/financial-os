@@ -33,7 +33,8 @@ test('vehicle OS row preserves expense date and calculates litres', () => {
     odometer: 9890,
     pricePerLitre: 114,
     note: 'Fuel refill',
+    id: 'expense-1',
   })).toEqual([
-    '2026-06-06', 'Jun', 2026, 201, 9890, 114, '1.76', '', 'Fuel refill',
+    '2026-06-06', 'Jun', 2026, 201, 9890, 114, '1.76', '', 'Fuel refill', 'expense-1',
   ]);
 });

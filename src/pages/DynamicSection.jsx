@@ -115,6 +115,7 @@ export default function DynamicSection({ sectionId }) {
   const [formData, setFormData] = useState({});
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState('');
 
   const config = SECTION_CONFIGS[sectionId];
   const sheetRef = state.appBlueprint?.find(s => s.SectionID === sectionId)?.SheetRef || sectionId;
@@ -125,18 +126,25 @@ export default function DynamicSection({ sectionId }) {
     } else {
       setLoading(false);
     }
-  }, [sectionId, state.sheetsConfig?.proxyUrl, state.user?.email]);
+  }, [sectionId, sheetRef, state.sheetsConfig?.proxyUrl, state.user?.email, state.lastSynced]);
 
   const loadData = async () => {
     setLoading(true);
-    const rows = await readDynamicSheet(state.sheetsConfig.proxyUrl, state.user?.email, sheetRef);
-    setData(rows);
-    setLoading(false);
+    setError('');
+    try {
+      const rows = await readDynamicSheet(state.sheetsConfig.proxyUrl, state.user?.email, sheetRef);
+      setData(rows);
+    } catch (loadError) {
+      setError(loadError.message || 'Could not sync this OS section.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSave = async () => {
     if (!state.sheetsConfig?.proxyUrl || !state.user?.email) return;
     setSaving(true);
+    setError('');
     const today = new Date();
     const dateStr = today.toLocaleDateString('en-IN');
     const monthStr = today.toLocaleString('default', { month: 'short' });
@@ -162,14 +170,20 @@ export default function DynamicSection({ sectionId }) {
         ...config.logFields.map(f => formData[f.key] || ''),
       ];
     }
+    row.push(`${Date.now()}-${Math.random().toString(36).slice(2, 9)}`);
 
-    await writeToDynamicSheet(state.sheetsConfig.proxyUrl, state.user?.email, sheetRef, row);
-    await loadData();
-    setFormData({});
-    setShowLog(false);
-    setSaving(false);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    try {
+      await writeToDynamicSheet(state.sheetsConfig.proxyUrl, state.user?.email, sheetRef, row);
+      await loadData();
+      setFormData({});
+      setShowLog(false);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (saveError) {
+      setError(saveError.message || 'Could not sync this OS entry.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   // Build chart data by month
@@ -198,6 +212,8 @@ export default function DynamicSection({ sectionId }) {
           <span style={{ fontSize: '10px', color: '#a78bfa' }}>Auto-built by Financial OS AI</span>
         </div>
       </div>
+
+      {error && <div className="system-notice system-notice--danger">{error}</div>}
 
       {/* Metrics */}
       {loading ? (

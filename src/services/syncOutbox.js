@@ -37,7 +37,16 @@ export function queueSyncOperation(userId, type, payload) {
 }
 
 async function execute(entry, proxyUrl, email) {
-  if (entry.type === 'expense') return logExpense(proxyUrl, email, entry.payload);
+  if (entry.type === 'expense') {
+    const result = await logExpense(proxyUrl, email, entry.payload);
+    const { autoLogExpenseToSections } = await import('./consciousnessEngine');
+    await autoLogExpenseToSections(proxyUrl, email, entry.payload, []);
+    return result;
+  }
+  if (entry.type === 'sectionExpense') {
+    const { autoLogExpenseToSections } = await import('./consciousnessEngine');
+    return autoLogExpenseToSections(proxyUrl, email, entry.payload.expense, entry.payload.existingSectionIds || []);
+  }
   if (entry.type === 'deleteExpense') return deleteExpense(proxyUrl, email, entry.payload);
   if (entry.type === 'income') return logIncome(proxyUrl, email, entry.payload);
   if (entry.type === 'goals') return writeGoals(proxyUrl, email, entry.payload);

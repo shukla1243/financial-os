@@ -217,11 +217,11 @@ export async function readBlueprint(proxyUrl, email) {
 }
 
 export async function writeToBlueprint(proxyUrl, email, section) {
-  return proxyPost(proxyUrl, 'setBlueprint', email, section);
+  return proxyMutation(proxyUrl, 'setBlueprint', email, section);
 }
 
 export async function createDynamicSheet(proxyUrl, email, tabName, headers) {
-  return proxyPost(proxyUrl, 'createDynamicSheet', email, { tabName, headers });
+  return proxyMutation(proxyUrl, 'createDynamicSheet', email, { tabName, headers });
 }
 
 export async function getDynamicSheet(proxyUrl, email, tabName) {
@@ -230,7 +230,7 @@ export async function getDynamicSheet(proxyUrl, email, tabName) {
 }
 
 export async function appendDynamicRow(proxyUrl, email, tabName, rowData) {
-  return proxyPost(proxyUrl, 'appendDynamicRow', email, { tabName, rowData });
+  return proxyMutation(proxyUrl, 'appendDynamicRow', email, { tabName, rowData });
 }
 
 // ─── CONNECTION TEST ─────────────────────────────────────────────────────────

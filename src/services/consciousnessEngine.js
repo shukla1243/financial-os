@@ -29,38 +29,38 @@ const SECTION_TRIGGERS = {
 const SECTION_DEFINITIONS = {
   vehicle: {
     sheetRef: 'VehicleLog',
-    headers: ['Date', 'Month', 'Year', 'FuelAmount', 'Odometer', 'PricePerLitre', 'LitresFilled', 'CostPerKm', 'Note'],
+    headers: ['Date', 'Month', 'Year', 'FuelAmount', 'Odometer', 'PricePerLitre', 'LitresFilled', 'CostPerKm', 'Note', 'ClientID'],
     parseData: (expense) => {
       const amt = expense.amount || 0;
       const price = expense.pricePerLitre || 0;
       const litres = price > 0 ? (amt / price).toFixed(2) : '';
       const odo = expense.odometer || '';
-      return [expense.date, expense.month, expense.year, amt, odo, price, litres, '', expense.note || ''];
+      return [expense.date, expense.month, expense.year, amt, odo, price, litres, '', expense.note || '', expense.id || ''];
     },
     metrics: ['Total spent on fuel', 'Avg cost/km', 'Litres filled', 'Fuel efficiency'],
   },
   health: {
     sheetRef: 'HealthLog',
-    headers: ['Date', 'Month', 'Year', 'Activity', 'Duration', 'Cost', 'Streak', 'Note'],
+    headers: ['Date', 'Month', 'Year', 'Activity', 'Duration', 'Cost', 'Streak', 'Note', 'ClientID'],
     parseData: (expense) => {
-      return [expense.date, expense.month, expense.year, expense.description, expense.duration || '', expense.amount || 0, '', expense.note || ''];
+      return [expense.date, expense.month, expense.year, expense.description, expense.duration || '', expense.amount || 0, '', expense.note || '', expense.id || ''];
     },
     metrics: ['Workouts this month', 'Cost per session', 'Current streak', 'Total invested in health'],
   },
   medical: {
     sheetRef: 'MedicalLog',
-    headers: ['Date', 'Month', 'Year', 'Type', 'Description', 'Amount', 'Doctor', 'Note'],
+    headers: ['Date', 'Month', 'Year', 'Type', 'Description', 'Amount', 'Doctor', 'Note', 'ClientID'],
     parseData: (expense) => {
-      return [expense.date, expense.month, expense.year, expense.medicalType || 'Expense', expense.description, expense.amount, expense.doctor || '', expense.note || ''];
+      return [expense.date, expense.month, expense.year, expense.medicalType || 'Expense', expense.description, expense.amount, expense.doctor || '', expense.note || '', expense.id || ''];
     },
     metrics: ['Medical spend this month', 'Doctor visits', 'Medicine costs', 'Annual health spend'],
   },
   work: {
     sheetRef: 'WorkLog',
-    headers: ['Date', 'Month', 'Year', 'Type', 'Client', 'Amount', 'Status', 'Note'],
+    headers: ['Date', 'Month', 'Year', 'Type', 'Client', 'Amount', 'Status', 'Note', 'ClientID'],
     parseData: (income) => {
       const today = new Date();
-      return [today.toLocaleDateString('en-IN'), today.toLocaleString('default',{month:'short'}), today.getFullYear(), 'Freelance', income.source || '', income.amount || 0, 'Received', income.note || ''];
+      return [today.toLocaleDateString('en-IN'), today.toLocaleString('default',{month:'short'}), today.getFullYear(), 'Freelance', income.source || '', income.amount || 0, 'Received', income.note || '', income.id || ''];
     },
     metrics: ['Freelance earned this month', 'Active clients', 'Projects completed', 'Avg per project'],
   },

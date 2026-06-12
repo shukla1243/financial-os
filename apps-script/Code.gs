@@ -1100,6 +1100,13 @@ function ensureDynamicSheet(ss, sheetName, headers) {
     }
     sheet.getRange(1, 1, 1, fullHeaders.length).setValues([fullHeaders]);
     sheet.setFrozenRows(1);
+  } else {
+    const fullHeaders = headers[0] === 'Email' ? headers : ['Email', ...headers];
+    fullHeaders.forEach((header, index) => {
+      if (sheet.getRange(1, index + 1).getDisplayValue() !== header) {
+        sheet.getRange(1, index + 1).setValue(header);
+      }
+    });
   }
   return sheet;
 }
@@ -1184,6 +1191,14 @@ function appendDynamicRow(ssId, email, tabName, rowData) {
           newRow[idx] = rowData[h] !== undefined ? rowData[h] : '';
         }
       });
+    }
+
+    const clientIdIdx = headers.indexOf('ClientID');
+    if (clientIdIdx !== -1 && newRow[clientIdIdx]) {
+      const existing = sheet.getRange(2, clientIdIdx + 1, Math.max(sheet.getLastRow() - 1, 1), 1).getDisplayValues();
+      if (existing.some(row => String(row[0] || '') === String(newRow[clientIdIdx]))) {
+        return { success: true, duplicate: true };
+      }
     }
     
     sheet.appendRow(sanitizeRow(newRow));

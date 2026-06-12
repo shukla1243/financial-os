@@ -59,6 +59,15 @@ test('preserves a reusable unknown category as a new proposal', () => {
   });
 });
 
+test('does not create an arbitrary category invented by the model', () => {
+  const result = parseExpensesForNewCategories([
+    { description: 'Fresh wash', amount: 429, category: 'Fresh Lifestyle' },
+  ], { Other: 1000 });
+
+  expect(result.newCategoryExpenses).toEqual([]);
+  expect(result.regular[0].category).toBe('Other');
+});
+
 test('category existence checks are case insensitive', () => {
   expect(checkCategoryExists('food', { Food: 3000 })).toEqual({
     known: true,

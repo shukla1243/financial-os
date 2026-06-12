@@ -226,8 +226,8 @@ function reducer(state, action) {
       const selectedTheme = chooseLatestTheme(state.config.theme, parsedTheme);
       return {
         ...state,
-        tracker: action.payload.tracker || [],
-        income: action.payload.income || [],
+        tracker: (action.payload.tracker || []).map(item => normalizeExpense(item)),
+        income: (action.payload.income || []).map(item => normalizeIncome(item)),
         investments: action.payload.investments || [],
         savingsGoals: action.payload.savingsGoals || [],
         billCalendar: action.payload.billCalendar || [],
@@ -562,7 +562,7 @@ export function AppProvider({ children }) {
         if (pendingResult.remaining.length > 0) return;
         const res = await proxyCheckUpdates(proxyUrl, email);
         if (res.success && res.lastUpdated) {
-          if (pendingResult.synced > 0 || (lastDriveUpdateRef.current !== 0 && res.lastUpdated > lastDriveUpdateRef.current)) {
+          if (pendingResult.synced > 0 || lastDriveUpdateRef.current === 0 || res.lastUpdated > lastDriveUpdateRef.current) {
             await syncFromSheets(proxyUrl, email);
           }
           lastDriveUpdateRef.current = res.lastUpdated;
@@ -586,7 +586,14 @@ export function AppProvider({ children }) {
       const synced = await proxyLogExpense(proxyUrl, email, expenseWithId).then(() => true).catch(() => false);
       const existingSectionIds = state.appBlueprint.map(section => section.SectionID);
       if (!synced) queueFailedWrite('expense', expenseWithId, 'Expense');
-      const createdSections = synced ? await autoLogExpenseToSections(proxyUrl, email, expenseWithId, existingSectionIds).catch(() => []) : [];
+      let createdSections = [];
+      if (synced) {
+        try {
+          createdSections = await autoLogExpenseToSections(proxyUrl, email, expenseWithId, existingSectionIds);
+        } catch (error) {
+          queueFailedWrite('sectionExpense', { id: expenseWithId.id, expense: expenseWithId, existingSectionIds }, 'Dynamic OS entry');
+        }
+      }
       createdSections.forEach(section => {
         dispatch({ type: 'ADD_BLUEPRINT_SECTION', payload: section });
         dispatch({

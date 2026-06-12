@@ -32,6 +32,7 @@ const CANONICAL_CATEGORY_KEYWORDS = {
   ],
   Subscriptions: ['subscription', 'netflix', 'spotify', 'youtube premium', 'prime'],
   Shopping: ['shopping', 'amazon', 'flipkart', 'clothes', 'clothing', 'shoes'],
+  'Personal Care': ['body wash', 'face wash', 'shampoo', 'soap', 'salon', 'haircut', 'skincare', 'cosmetic'],
   Entertainment: ['entertainment', 'movie', 'cinema', 'game', 'gaming', 'concert'],
   Education: ['education', 'course', 'tuition', 'book', 'books', 'exam'],
   Travel: ['travel', 'flight', 'hotel', 'trip', 'vacation'],
@@ -227,6 +228,12 @@ ACTIONS TO SUPPORT:
    - "needsClarification": true
    - "clarificationQuestion": "<Your complete, clear natural language response>"
 
+ACTION SAFETY:
+- Return a goal update only when the user's latest message explicitly asks to update, add to, or set a savings goal.
+- Return a bill update only when the user's latest message explicitly says a bill was paid or asks to mark it paid.
+- Return deletions only when the user's latest message explicitly asks to delete, remove, undo, or find duplicates.
+- Never infer a goal update, bill payment, or deletion from an ordinary expense message.
+
 IMPORTANT — NEW CATEGORY DETECTION:
 If an expense clearly does NOT fit any of the CURRENT CATEGORIES, set:
   "category": "NEW:<YourSuggestedCategoryName>"
@@ -323,15 +330,19 @@ export function parseExpensesForNewCategories(expenses, budgets = {}) {
   expenses.forEach(exp => {
     const canonicalCategory = inferCanonicalCategory(exp);
     const existingCategory = findExistingCategory(canonicalCategory, budgets);
+    const explicitlyNew = /^NEW:/i.test(String(exp?.category || ''));
+    const isCanonicalCategory = Object.prototype.hasOwnProperty.call(CANONICAL_CATEGORY_KEYWORDS, canonicalCategory);
 
     if (existingCategory) {
       regular.push({ ...exp, category: existingCategory });
-    } else {
+    } else if (explicitlyNew || isCanonicalCategory) {
       newCategoryExpenses.push({
         ...exp,
         category: canonicalCategory,
         suggestedCategoryName: canonicalCategory,
       });
+    } else {
+      regular.push({ ...exp, category: findExistingCategory('Other', budgets) || 'Other' });
     }
   });
 

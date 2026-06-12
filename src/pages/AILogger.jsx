@@ -5,6 +5,7 @@ import { Send, Camera, Check, X, Edit3, Loader, Zap, Plus } from 'lucide-react';
 import { callAI } from '../services/aiService';
 import { sanitizeAITextForDisplay } from '../services/aiOutputGuard';
 import { extractJsonObject } from '../services/aiJson';
+import { guardParsedActions } from '../services/aiActionGuard';
 
 function getCatIcon(cat) {
   const iconMap = {
@@ -461,7 +462,8 @@ export default function AILogger() {
     }).catch(() => {});
 
     try {
-      const result = await parseWithGemini(userMsg, messages);
+      const parsedResult = await parseWithGemini(userMsg, messages);
+      const result = guardParsedActions(parsedResult, userMsg, state);
       if (result.error) {
         setMessages(prev => [...prev, { role: 'ai', text: `⚠️ ${result.error}` }]);
         return;
@@ -486,30 +488,18 @@ export default function AILogger() {
         const regular = [...knownCategoryExpenses];
 
         if (newCategoryExpenses.length > 0) {
-          const categoriesToCreate = [...new Set(
-            newCategoryExpenses.map(exp => exp.suggestedCategoryName)
-          )];
-
-          await Promise.all(categoriesToCreate.map(async categoryName => {
-            const sampleExpense = newCategoryExpenses.find(
-              exp => exp.suggestedCategoryName === categoryName
-            );
+          const proposals = await Promise.all(newCategoryExpenses.map(async expense => {
             const suggestion = await suggestNewCategory(
               state.geminiKey,
-              sampleExpense,
+              expense,
               Object.keys(state.config.budgets)
             );
-            await addNewCategory(categoryName, suggestion.budget || 0);
+            return { expense, suggestion };
           }));
-
-          regular.push(...newCategoryExpenses.map(exp => ({
-            ...exp,
-            category: exp.suggestedCategoryName,
-          })));
-
+          setPendingNewCategories(prev => [...prev, ...proposals]);
           setMessages(prev => [...prev, {
             role: 'ai',
-            text: `I understood the context and automatically created ${categoriesToCreate.join(', ')}.`
+            text: 'I found a possible new category. Confirm it before I create or log anything.'
           }]);
         }
 
