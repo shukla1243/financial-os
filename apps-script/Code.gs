@@ -22,7 +22,7 @@ const OPENROUTER_MODELS = [
 const ALLOWED_ACTIONS = [
   'initUser', 'getUserStatus', 'getAdminRegistry', 'toggleUserStatus', 'toggleUserPlan',
   'getConfig', 'setConfig', 'setConfigBatch', 'completeOnboarding',
-  'getExpenses', 'logExpense', 'deleteExpense', 'getIncome', 'logIncome',
+  'getExpenses', 'logExpense', 'deleteExpense', 'getIncome', 'logIncome', 'getInvestments', 'logInvestment',
   'getGoals', 'setGoals', 'getBills', 'setBills', 'getMemory', 'logMemory',
   'getBlueprint', 'setBlueprint', 'logSnapshot', 'checkUpdates', 'loadAll',
   'createDynamicSheet', 'getDynamicSheet', 'appendDynamicRow', 'callAI',
@@ -36,7 +36,7 @@ const SCHEMAS = {
   Config:          ['Email', 'Key', 'Value'],
   Tracker:         ['Email', 'Month', 'Year', 'Day', 'Date', 'Category', 'Description', 'Amount', 'Mode', 'Note', 'ClientID'],
   Income:          ['Email', 'Month', 'Year', 'Date', 'Type', 'Source', 'Amount', 'Note', 'ClientID'],
-  Investments:     ['Email', 'Date', 'Type', 'Fund_Coin', 'Units', 'BuyPrice', 'CurrentValue', 'Platform', 'Note'],
+  Investments:     ['Email', 'Date', 'Type', 'Fund_Coin', 'Units', 'BuyPrice', 'CurrentValue', 'Platform', 'Note', 'ClientID'],
   SavingsGoals:    ['Email', 'ID', 'GoalName', 'Target', 'Saved', 'MonthlyAdd', 'Deadline', 'Icon', 'Color', 'Status'],
   MonthlySnapshot: ['Email', 'Month', 'Year', 'Income', 'ExtraIncome', 'Expenses', 'Savings', 'Buffer', 'SavingsRate', 'TopCategory', 'Notes'],
   AIMemory:        ['Email', 'Date', 'Type', 'Observation'],
@@ -113,6 +113,8 @@ function doPost(e) {
       case 'deleteExpense':  result = deleteExpense(userSsId, email, data); break;
       case 'getIncome':      result = getIncome(userSsId, email); break;
       case 'logIncome':      result = logIncome(userSsId, email, data); break;
+      case 'getInvestments': result = getInvestments(userSsId, email); break;
+      case 'logInvestment':  result = logInvestment(userSsId, email, data); break;
       case 'getGoals':       result = getGoals(userSsId, email); break;
       case 'setGoals':       result = setGoals(userSsId, email, data); break;
       case 'getBills':       result = getBills(userSsId, email); break;
@@ -137,7 +139,7 @@ function doPost(e) {
 
 function doGet(e) {
   // Health check
-  return jsonResponse({ success: true, status: 'Financial OS Backend Running', apiVersion: 2 });
+  return jsonResponse({ success: true, status: 'Financial OS Backend Running', apiVersion: 3 });
 }
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
@@ -888,6 +890,51 @@ function logIncome(ssId, email, income) {
   }
 }
 
+function getInvestments(ssId, email) {
+  try {
+    const rows = readUserRows(ssId, 'Investments', email);
+    return {
+      success: true,
+      data: rows.map(({ obj }) => ({
+        Date: formatDateString(obj.Date),
+        Type: obj.Type,
+        Fund_Coin: obj.Fund_Coin,
+        Units: parseFloat(obj.Units) || 0,
+        BuyPrice: parseFloat(obj.BuyPrice) || 0,
+        CurrentValue: parseFloat(obj.CurrentValue) || 0,
+        Platform: obj.Platform,
+        Note: obj.Note,
+        ClientID: obj.ClientID || '',
+      })),
+    };
+  } catch (err) {
+    return { success: false, error: err.toString(), data: [] };
+  }
+}
+
+function logInvestment(ssId, email, investment) {
+  try {
+    const clientId = String(investment.id || investment.ClientID || '');
+    if (clientId) {
+      const duplicate = readUserRows(ssId, 'Investments', email).some(({ obj }) => String(obj.ClientID || '') === clientId);
+      if (duplicate) return { success: true, duplicate: true };
+    }
+    return appendUserRow(ssId, 'Investments', email, [
+      investment.date || investment.Date || '',
+      investment.type || investment.Type || '',
+      investment.fundCoin || investment.Fund_Coin || '',
+      Number(investment.units || investment.Units) || 0,
+      Number(investment.buyPrice || investment.BuyPrice) || 0,
+      Number(investment.currentValue || investment.CurrentValue) || 0,
+      investment.platform || investment.Platform || '',
+      investment.note || investment.Note || '',
+      clientId,
+    ]);
+  } catch (err) {
+    return { success: false, error: err.toString() };
+  }
+}
+
 function getGoals(ssId, email) {
   try {
     const rows = readUserRows(ssId, 'SavingsGoals', email);
@@ -1047,7 +1094,7 @@ function loadAll(ssId, email) {
 
     return {
       success: true,
-      apiVersion: 2,
+      apiVersion: 3,
       isAdmin: !!ADMIN_EMAIL && email.toLowerCase() === ADMIN_EMAIL.toLowerCase(),
       tracker: expensesResult.data,
       income: incomeResult.data,

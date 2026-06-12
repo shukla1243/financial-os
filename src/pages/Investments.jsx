@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { getDynamicSheet, appendDynamicRow } from '../services/proxyService';
+import { logInvestment, readInvestments } from '../services/proxyService';
 import { callAI } from '../services/aiService';
 import { TrendingUp, Upload, Check, RefreshCw, AlertCircle } from 'lucide-react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
@@ -18,6 +18,7 @@ export default function Investments() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [portfolio, setPortfolio] = useState([]);
+  const [syncError, setSyncError] = useState('');
   const [cryptoPrices, setCryptoPrices] = useState({
     bitcoin: { inr: 5800000 },
     ethereum: { inr: 320000 },
@@ -95,11 +96,12 @@ export default function Investments() {
 
   const fetchInvestments = async () => {
     setLoading(true);
+    setSyncError('');
     try {
       const { proxyUrl, connected } = state.sheetsConfig;
       const email = state.user?.email;
       if (connected && proxyUrl && email) {
-        const data = await getDynamicSheet(proxyUrl, email, 'Investments');
+        const data = await readInvestments(proxyUrl, email);
         
         // Resolve wallet balances dynamically
         const resolvedData = await resolveAllInvestments(data || []);
@@ -108,6 +110,7 @@ export default function Investments() {
       }
     } catch (e) {
       console.error('Failed to load investments:', e);
+      setSyncError(e.message || 'Failed to load investments from Sheets.');
     } finally {
       setLoading(false);
     }
@@ -180,17 +183,17 @@ Return ONLY a JSON array matching this format (no markdown code blocks, no trail
     try {
       for (const holding of toSave) {
         const dateStr = new Date().toLocaleDateString('en-IN');
-        const rowData = [
-          dateStr,
-          'SIP',
-          holding.name,
-          holding.units,
-          holding.invested / holding.units, // Buy Price = Invested / Units
-          holding.currentValue,
-          holding.platform || 'Groww',
-          'Imported via Statement Parser'
-        ];
-        await appendDynamicRow(proxyUrl, email, 'Investments', rowData);
+        await logInvestment(proxyUrl, email, {
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+          date: dateStr,
+          type: 'SIP',
+          fundCoin: holding.name,
+          units: holding.units,
+          buyPrice: holding.units ? holding.invested / holding.units : 0,
+          currentValue: holding.currentValue,
+          platform: holding.platform || 'Groww',
+          note: 'Imported via Statement Parser',
+        });
       }
       setStatementText('');
       setParsedHoldings([]);
@@ -222,19 +225,18 @@ Return ONLY a JSON array matching this format (no markdown code blocks, no trail
       const currentValNum = manualCurrentValue ? parseFloat(manualCurrentValue) : buyPriceNum * unitsNum;
       const dateStr = manualDate ? new Date(manualDate).toLocaleDateString('en-IN') : new Date().toLocaleDateString('en-IN');
       
-      const rowData = [
-        dateStr,
-        'SIP',
-        manualName.trim(),
-        unitsNum,
-        buyPriceNum,
-        currentValNum, 
-        manualPlatform || 'Groww',
-        manualNote || 'Manually Logged SIP'
-      ];
-
       if (connected && proxyUrl && email) {
-        await appendDynamicRow(proxyUrl, email, 'Investments', rowData);
+        await logInvestment(proxyUrl, email, {
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+          date: dateStr,
+          type: 'SIP',
+          fundCoin: manualName.trim(),
+          units: unitsNum,
+          buyPrice: buyPriceNum,
+          currentValue: currentValNum,
+          platform: manualPlatform || 'Groww',
+          note: manualNote || 'Manually Logged SIP',
+        });
         alert('Investment added successfully!');
         setManualName('');
         setManualUnits('');
@@ -273,19 +275,18 @@ Return ONLY a JSON array matching this format (no markdown code blocks, no trail
         balance = await fetchSingleWalletBalance(walletAddress.trim(), walletAsset) || 0;
       }
 
-      const rowData = [
-        dateStr,
-        'Crypto',
-        walletAsset, // e.g. evm-wallet, bitcoin, ethereum, solana
-        balance, // initial units balance
-        0, // buy price = 0
-        0, // current val = 0
-        'Wallet: ' + walletAddress.trim(),
-        'Tracked Wallet Address'
-      ];
-
       if (connected && proxyUrl && email) {
-        await appendDynamicRow(proxyUrl, email, 'Investments', rowData);
+        await logInvestment(proxyUrl, email, {
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+          date: dateStr,
+          type: 'Crypto',
+          fundCoin: walletAsset,
+          units: balance,
+          buyPrice: 0,
+          currentValue: 0,
+          platform: `Wallet: ${walletAddress.trim()}`,
+          note: 'Tracked Wallet Address',
+        });
         alert('Wallet added successfully!');
         setWalletAddress('');
         await fetchInvestments();
@@ -349,6 +350,12 @@ Return ONLY a JSON array matching this format (no markdown code blocks, no trail
       </div>
 
       {/* API Restriction Alert */}
+      {syncError && (
+        <div className="system-notice system-notice--danger" style={{ marginBottom: '16px' }}>
+          <AlertCircle size={17} />
+          <span>{syncError}</span>
+        </div>
+      )}
       <div style={{ borderRadius: '12px', padding: '14px', marginBottom: '20px', background: 'rgba(99, 102, 241, 0.08)', border: '1px solid rgba(99, 102, 241, 0.25)', display: 'flex', gap: '10px', alignItems: 'flex-start', animation: 'fadeIn 0.5s ease-out' }}>
         <AlertCircle size={18} color="var(--primary-color)" style={{ flexShrink: 0, marginTop: '2px' }} />
         <div>

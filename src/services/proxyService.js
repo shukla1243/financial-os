@@ -220,6 +220,16 @@ export async function writeToBlueprint(proxyUrl, email, section) {
   return proxyMutation(proxyUrl, 'setBlueprint', email, section);
 }
 
+export async function logInvestment(proxyUrl, email, investment) {
+  return proxyMutation(proxyUrl, 'logInvestment', email, investment);
+}
+
+export async function readInvestments(proxyUrl, email) {
+  const result = await proxyPost(proxyUrl, 'getInvestments', email);
+  if (!result.success) throw new Error(result.error || 'Could not load investments.');
+  return result.data || [];
+}
+
 export async function createDynamicSheet(proxyUrl, email, tabName, headers) {
   return proxyMutation(proxyUrl, 'createDynamicSheet', email, { tabName, headers });
 }

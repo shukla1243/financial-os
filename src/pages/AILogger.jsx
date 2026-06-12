@@ -6,6 +6,7 @@ import { callAI } from '../services/aiService';
 import { sanitizeAITextForDisplay } from '../services/aiOutputGuard';
 import { extractJsonObject } from '../services/aiJson';
 import { guardParsedActions } from '../services/aiActionGuard';
+import { buildClarifiedInput } from '../services/clarificationContext';
 
 function getCatIcon(cat) {
   const iconMap = {
@@ -393,6 +394,7 @@ export default function AILogger() {
   const [pendingGoals, setPendingGoals] = useState([]);
   const [pendingBills, setPendingBills] = useState([]);
   const [pendingDeletions, setPendingDeletions] = useState([]);
+  const [pendingClarification, setPendingClarification] = useState('');
   
   // Edit indices
   const [editingIndex, setEditingIndex] = useState(null);
@@ -460,19 +462,22 @@ export default function AILogger() {
     }).catch(() => {});
 
     try {
-      const parsedResult = await parseWithGemini(userMsg);
+      const parserInput = buildClarifiedInput(pendingClarification, userMsg);
+      const parsedResult = await parseWithGemini(parserInput);
       const result = guardParsedActions(parsedResult, userMsg, state);
       if (result.error) {
         setMessages(prev => [...prev, { role: 'ai', text: `⚠️ ${result.error}` }]);
         return;
       }
       if (result.needsClarification) {
+        setPendingClarification(parserInput);
         setMessages(prev => [...prev, {
           role: 'ai',
           text: sanitizeAITextForDisplay(result.clarificationQuestion),
         }]);
         return;
       }
+      setPendingClarification('');
 
       let foundAction = false;
 

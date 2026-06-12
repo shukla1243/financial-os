@@ -11,7 +11,7 @@ import {
   addCategory as proxyAddCategory,
   proxyCheckUpdates,
   getUserStatus,
-  getDynamicSheet,
+  readInvestments,
   completeOnboarding as proxyCompleteOnboarding,
   saveConfig as proxySaveConfig,
   testProxyConnection,
@@ -442,7 +442,7 @@ export function AppProvider({ children }) {
               }
             } catch (themeError) {}
           }
-          const invData = await getDynamicSheet(PROXY_URL, email, 'Investments').catch(() => []);
+          const invData = await readInvestments(PROXY_URL, email).catch(() => []);
           data.investments = await resolveAllInvestments(invData);
           dispatch({ type: 'LOAD_FROM_PROXY', payload: data });
           dispatch({ type: 'SET_SYNC_STATUS', payload: { status: 'success', time: new Date().toISOString() } });
@@ -541,7 +541,7 @@ export function AppProvider({ children }) {
           dispatch({ type: 'ADD_NOTIFICATION', payload: { giftId: statusRes.giftId, type: 'gift', message: statusRes.giftMessage, read: false } });
         }
       }
-      const invData = await getDynamicSheet(proxyUrl, email, 'Investments').catch(() => []);
+      const invData = await readInvestments(proxyUrl, email).catch(() => []);
       data.investments = await resolveAllInvestments(invData);
       dispatch({ type: 'LOAD_FROM_PROXY', payload: data });
       dispatch({ type: 'SET_SYNC_STATUS', payload: { status: 'success', time: new Date().toISOString() } });
