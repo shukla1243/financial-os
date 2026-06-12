@@ -19,6 +19,15 @@ test('keeps an explicitly requested named goal update', () => {
   expect(result.goals).toHaveLength(1);
 });
 
+test('keeps an explicitly requested withdrawal from a named goal', () => {
+  const result = guardParsedActions(
+    { goals: [{ id: 1, saved: 4000 }] },
+    'I took 1000 from my Delhi Trip',
+    { savingsGoals: [{ id: 1, name: 'Delhi Trip' }] }
+  );
+  expect(result.goals).toHaveLength(1);
+});
+
 test('removes hallucinated bill and deletion actions', () => {
   const result = guardParsedActions(
     { bills: [{ id: 1 }], deletions: [{ amount: 100 }] },

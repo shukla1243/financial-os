@@ -4,6 +4,7 @@ import { calculateGoalSavings, calculateNetWorth } from '../services/netWorth';
 import { Send, Bot, User, Sparkles, TrendingUp, HelpCircle, Target, Calendar } from 'lucide-react';
 import { callAI } from '../services/aiService';
 import { sanitizeAITextForDisplay } from '../services/aiOutputGuard';
+import { formatDynamicModuleContext, loadDynamicModuleContext } from '../services/dynamicModuleContext';
 
 const QUICK_PROMPTS = [
   { icon: '📊', text: 'Am I on track this month?' },
@@ -24,12 +25,20 @@ export default function AIChat() {
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [dynamicModuleContext, setDynamicModuleContext] = useState('');
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  useEffect(() => {
+    let active = true;
+    loadDynamicModuleContext(state.sheetsConfig?.proxyUrl, state.user?.email, state.appBlueprint)
+      .then(modules => { if (active) setDynamicModuleContext(formatDynamicModuleContext(modules)); });
+    return () => { active = false; };
+  }, [state.sheetsConfig?.proxyUrl, state.user?.email, state.appBlueprint, state.lastSynced]);
 
   const buildContext = () => {
     const { config, tracker, income, investments, savingsGoals, billCalendar, aiMemory } = state;
@@ -105,6 +114,9 @@ ${goalsText}
 
 BILL CALENDAR SHEET:
 ${billsText}
+
+AI-BUILT MODULES AND LATEST SYNCED BACKEND ROWS:
+${dynamicModuleContext || 'No AI-built modules yet.'}
 
 NET WORTH:
 Cash Buffer: ₹${buffer.toLocaleString()}

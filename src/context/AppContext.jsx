@@ -17,7 +17,7 @@ import {
   saveConfig as proxySaveConfig,
   testProxyConnection,
 } from '../services/proxyService';
-import { autoLogExpenseToSections, runConsciousnessScan, readBlueprint } from '../services/consciousnessEngine';
+import { autoLogExpenseToEvolvedSections, autoLogExpenseToSections, runConsciousnessScan, readBlueprint } from '../services/consciousnessEngine';
 import { resolveAllInvestments } from '../services/walletService';
 import { clearLegacyStorage, getStableUserId, readUserState, writeUserState } from '../services/userStorage';
 import { calculateFinancialHealth } from '../services/financialHealth';
@@ -608,6 +608,11 @@ export function AppProvider({ children }) {
           createdSections = await autoLogExpenseToSections(proxyUrl, email, expenseWithId, existingSectionIds);
         } catch (error) {
           queueFailedWrite('sectionExpense', { id: expenseWithId.id, expense: expenseWithId, existingSectionIds }, 'Dynamic OS entry');
+        }
+        try {
+          await autoLogExpenseToEvolvedSections(proxyUrl, email, expenseWithId, state.appBlueprint);
+        } catch (error) {
+          queueFailedWrite('evolvedSectionExpense', { id: expenseWithId.id, expense: expenseWithId, blueprint: state.appBlueprint }, 'AI-built OS entry');
         }
       }
       createdSections.forEach(section => {

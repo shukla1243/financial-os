@@ -39,16 +39,21 @@ export function queueSyncOperation(userId, type, payload) {
 async function execute(entry, proxyUrl, email) {
   if (entry.type === 'expense') {
     const result = await logExpense(proxyUrl, email, entry.payload);
-    const { autoLogExpenseToSections, readBlueprint } = await import('./consciousnessEngine');
+    const { autoLogExpenseToEvolvedSections, autoLogExpenseToSections, readBlueprint } = await import('./consciousnessEngine');
     await autoLogExpenseToSections(proxyUrl, email, entry.payload, []);
     const { evolveFromExpense } = await import('./evolutionEngine');
     const blueprint = await readBlueprint(proxyUrl, email);
+    await autoLogExpenseToEvolvedSections(proxyUrl, email, entry.payload, blueprint);
     await evolveFromExpense(proxyUrl, email, entry.payload, blueprint, {});
     return result;
   }
   if (entry.type === 'sectionExpense') {
     const { autoLogExpenseToSections } = await import('./consciousnessEngine');
     return autoLogExpenseToSections(proxyUrl, email, entry.payload.expense, entry.payload.existingSectionIds || []);
+  }
+  if (entry.type === 'evolvedSectionExpense') {
+    const { autoLogExpenseToEvolvedSections } = await import('./consciousnessEngine');
+    return autoLogExpenseToEvolvedSections(proxyUrl, email, entry.payload.expense, entry.payload.blueprint || []);
   }
   if (entry.type === 'deleteExpense') return deleteExpense(proxyUrl, email, entry.payload);
   if (entry.type === 'income') return logIncome(proxyUrl, email, entry.payload);

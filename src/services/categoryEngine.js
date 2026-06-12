@@ -142,7 +142,7 @@ Respond ONLY with this JSON (no markdown):
  * Build a dynamic system prompt for AI Logger that always reads categories
  * from current app state — so new categories are immediately recognized.
  */
-export function buildDynamicSystemPrompt(state) {
+export function buildDynamicSystemPrompt(state, dynamicModuleContext = '') {
   const categories = Object.keys(state.config.budgets);
   const categoryList = categories.join(', ');
 
@@ -216,6 +216,9 @@ ${goalsText || 'No goals registered'}
 5. BILL CALENDAR SHEET:
 ${billsText || 'No bills registered'}
 
+6. AI-BUILT MODULES AND THEIR LATEST BACKEND ROWS:
+${dynamicModuleContext || 'No AI-built modules yet.'}
+
 ACTIONS TO SUPPORT:
 1. LOG EXPENSE: Spent money on food, travel, rent, coffee, etc. Parse into "expenses" array.
 2. LOG INCOME: Received money (salary, freelance payment, gift). Parse into "income" array.
@@ -272,7 +275,8 @@ RESPOND ONLY WITH THIS JSON (no markdown, no explanation, no backticks):
       "pricePerLitre": "number or empty; extract fuel rate per litre",
       "duration": "number or empty; workout duration in minutes",
       "doctor": "string or empty; doctor or hospital name",
-      "medicalType": "string or empty; medicine, visit, test, etc."
+      "medicalType": "string or empty; medicine, visit, test, etc.",
+      "dynamicFields": {"ExactBlueprintFieldKey": "value extracted for an AI-built module, or empty object"}
     }
   ],
   "income": [
@@ -316,6 +320,7 @@ RESPOND ONLY WITH THIS JSON (no markdown, no explanation, no backticks):
 }
 
 If amount is missing for a VARIABLE expense (like electricity), set needsClarification: true and ask for it.
+When an AI-built module field is relevant to the user's message, copy its exact field key and extracted value into dynamicFields.
 If multiple actions are requested in one sentence, return them in their respective arrays.`;
 }
 

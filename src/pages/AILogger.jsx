@@ -7,6 +7,7 @@ import { sanitizeAITextForDisplay } from '../services/aiOutputGuard';
 import { extractJsonObject } from '../services/aiJson';
 import { guardParsedActions } from '../services/aiActionGuard';
 import { buildClarifiedInput } from '../services/clarificationContext';
+import { formatDynamicModuleContext, loadDynamicModuleContext } from '../services/dynamicModuleContext';
 
 function getCatIcon(cat) {
   const iconMap = {
@@ -410,7 +411,8 @@ export default function AILogger() {
   const parseWithGemini = async (text) => {
     if (!state.geminiKey) return { error: 'No OpenRouter API key set. Contact your system admin to configure it.' };
     try {
-      const systemPrompt = buildDynamicSystemPrompt(state);
+      const modules = await loadDynamicModuleContext(state.sheetsConfig?.proxyUrl, state.user?.email, state.appBlueprint);
+      const systemPrompt = buildDynamicSystemPrompt(state, formatDynamicModuleContext(modules));
       // Current financial state is already embedded in the system prompt.
       // Replaying old assistant cards can make free models repeat stale actions.
       const contents = [{ role: 'user', content: text }];

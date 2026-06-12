@@ -147,6 +147,49 @@ export async function autoLogExpenseToSections(proxyUrl, email, expense, existin
   return createdSections;
 }
 
+const MODULE_STOP_WORDS = new Set(['track', 'user', 'specific', 'reusable', 'ongoing', 'with', 'from', 'this', 'that', 'your', 'entry', 'entries', 'module', 'system']);
+
+function parseBlueprintConfig(section) {
+  try { return section?.ConfigJSON ? JSON.parse(section.ConfigJSON) : null; } catch (error) { return null; }
+}
+
+export function matchesEvolvedSection(expense, section) {
+  const config = parseBlueprintConfig(section);
+  if (!config?.logFields?.length) return false;
+  const sourceText = `${expense.description || ''} ${expense.note || ''} ${expense.category || ''} ${expense.mode || ''}`.toLowerCase();
+  const moduleText = `${section.Name || ''} ${config.title || ''} ${config.subtitle || ''} ${config.reasoning || ''}`.toLowerCase();
+  const keywords = moduleText.match(/[a-z0-9]+/g)?.filter(word => word.length > 3 && !MODULE_STOP_WORDS.has(word) && word !== 'financial') || [];
+  if (keywords.some(keyword => sourceText.includes(keyword))) return true;
+  return /commitment|installment/.test(moduleText) && /\bemi\b|\binstallment\b|\binterest rate\b/.test(sourceText);
+}
+
+export function buildEvolvedSectionRow(expense, section) {
+  const config = parseBlueprintConfig(section);
+  const source = {
+    Date: expense.date, Month: expense.month, Year: expense.year,
+    Description: expense.description, Amount: expense.amount,
+    Category: expense.category, Mode: expense.mode, Note: expense.note,
+  };
+  const row = { Date: expense.date, Month: expense.month, Year: expense.year };
+  (config?.logFields || []).forEach(field => {
+    row[field.key] = source[field.key] ?? expense[field.key] ?? expense.dynamicFields?.[field.key] ?? '';
+  });
+  row.ClientID = expense.id || '';
+  return row;
+}
+
+export async function autoLogExpenseToEvolvedSections(proxyUrl, email, expense, blueprint = []) {
+  const matched = (blueprint || []).filter(section => matchesEvolvedSection(expense, section));
+  const { createDynamicSheet, appendDynamicRow } = await import('./proxyService');
+  for (const section of matched) {
+    const config = parseBlueprintConfig(section);
+    const headers = ['Date', 'Month', 'Year', ...(config.logFields || []).map(field => field.key), 'ClientID'];
+    await createDynamicSheet(proxyUrl, email, section.SheetRef, headers);
+    await appendDynamicRow(proxyUrl, email, section.SheetRef, buildEvolvedSectionRow(expense, section));
+  }
+  return matched;
+}
+
 export async function readDynamicSheet(proxyUrl, email, sheetName) {
   const { getDynamicSheet } = await import('./proxyService');
   const rows = await getDynamicSheet(proxyUrl, email, sheetName);

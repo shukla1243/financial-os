@@ -1,4 +1,4 @@
-import { enrichVehicleRows, findTriggeredSectionIds, SECTION_DEFINITIONS, readDynamicSheet } from './consciousnessEngine';
+import { buildEvolvedSectionRow, enrichVehicleRows, findTriggeredSectionIds, matchesEvolvedSection, SECTION_DEFINITIONS, readDynamicSheet } from './consciousnessEngine';
 
 jest.mock('./proxyService', () => ({
   getDynamicSheet: jest.fn(),
@@ -63,4 +63,18 @@ test('vehicle OS calculates distance traveled and cost per km from odometer inte
     expect.objectContaining({ DistanceTraveled: '', CostPerKm: '' }),
     expect.objectContaining({ DistanceTraveled: 711, CostPerKm: 0.28 }),
   ]);
+});
+
+test('future matching expenses are routed into an evolved module schema', () => {
+  const section = {
+    Name: 'Commitment OS',
+    ConfigJSON: JSON.stringify({
+      subtitle: 'Track financed purchases and installments',
+      logFields: [{ key: 'Description' }, { key: 'Amount' }, { key: 'Mode' }, { key: 'Note' }],
+    }),
+  };
+  const expense = { id: 'expense-2', date: '2026-06-13', month: 'Jun', year: 2026, description: 'Bed EMI', amount: 1950, mode: 'EMI', note: '3 months' };
+  expect(matchesEvolvedSection(expense, section)).toBe(true);
+  expect(buildEvolvedSectionRow({ ...expense, dynamicFields: { Note: '3 months at 0%' } }, section))
+    .toMatchObject({ Description: 'Bed EMI', Amount: 1950, Note: '3 months', ClientID: 'expense-2' });
 });

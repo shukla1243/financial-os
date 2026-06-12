@@ -60,9 +60,14 @@ export function RankBadge({ score }) {
 
 export function ProgressLine({ value, color = 'var(--primary-color)' }) {
   const boundedValue = Math.max(0, Math.min(Number(value) || 0, 100));
+  const fillStyle = {
+    width: '100%',
+    transform: `scaleX(${boundedValue / 100})`,
+    background: color,
+  };
   return (
-    <div className="game-progress">
-      <div className="game-progress__fill" style={{ width: `${boundedValue}%`, background: color }} />
+    <div className="game-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={boundedValue}>
+      <div className="game-progress__fill" style={fillStyle} />
     </div>
   );
 }
