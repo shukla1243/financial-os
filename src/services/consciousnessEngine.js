@@ -153,7 +153,7 @@ export async function readDynamicSheet(proxyUrl, email, sheetName) {
   if (sheetName !== 'VehicleLog') return rows;
 
   const seen = new Set();
-  return rows
+  const cleanedRows = rows
     .map(row => {
       const context = enrichExpenseContext({
         note: row.Note,
@@ -176,6 +176,31 @@ export async function readDynamicSheet(proxyUrl, email, sheetName) {
       seen.add(signature);
       return row.Date || row.FuelAmount || row.Odometer || row.Note;
     });
+  return enrichVehicleRows(cleanedRows);
+}
+
+export function enrichVehicleRows(rows = []) {
+  const orderedReadings = rows
+    .map((row, index) => ({ index, odometer: Number(row.Odometer) || 0 }))
+    .filter(item => item.odometer > 0)
+    .sort((a, b) => a.odometer - b.odometer);
+  const derived = new Map();
+
+  orderedReadings.forEach((reading, index) => {
+    const previous = orderedReadings[index - 1];
+    const distance = previous ? reading.odometer - previous.odometer : 0;
+    const fuelAmount = Number(rows[reading.index].FuelAmount) || 0;
+    derived.set(reading.index, {
+      distance: distance > 0 ? distance : 0,
+      costPerKm: distance > 0 ? Number((fuelAmount / distance).toFixed(2)) : '',
+    });
+  });
+
+  return rows.map((row, index) => ({
+    ...row,
+    DistanceTraveled: derived.get(index)?.distance || '',
+    CostPerKm: derived.get(index)?.costPerKm || '',
+  }));
 }
 
 // ─── MAIN CONSCIOUSNESS SCAN ──────────────────────────────────────────────────

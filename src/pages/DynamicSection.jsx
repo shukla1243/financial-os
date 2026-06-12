@@ -17,6 +17,8 @@ const SECTION_CONFIGS = {
       { label: 'LITRES FILLED', field: 'LitresFilled', sum: true, suffix: 'L', color: '#06b6d4' },
       { label: 'FILL-UPS', field: 'Date', count: true, color: '#a78bfa' },
       { label: 'AVG COST/FILL', field: 'FuelAmount', avg: true, prefix: '₹', color: '#10b981' },
+      { label: 'TOTAL DISTANCE', field: 'DistanceTraveled', sum: true, suffix: ' km', color: '#38bdf8' },
+      { label: 'COST PER KM', field: 'CostPerKm', weightedCostPerKm: true, prefix: '₹', suffix: '/km', color: '#f472b6' },
     ],
     logFields: [
       { key: 'FuelAmount', label: 'Amount Spent (₹)', type: 'number', placeholder: '350' },
@@ -103,6 +105,14 @@ function computeMetric(data, metricConfig) {
   if (metricConfig.avg) {
     const avg = values.length ? (values.reduce((a, b) => a + b, 0) / values.length).toFixed(0) : 0;
     return `${metricConfig.prefix || ''}${parseInt(avg).toLocaleString()}${metricConfig.suffix || ''}`;
+  }
+  if (metricConfig.weightedCostPerKm) {
+    const distance = data.reduce((sum, row) => sum + (Number(row.DistanceTraveled) || 0), 0);
+    const fuelCost = data.reduce((sum, row) => (
+      sum + ((Number(row.DistanceTraveled) || 0) > 0 ? Number(row.FuelAmount) || 0 : 0)
+    ), 0);
+    const costPerKm = distance > 0 ? (fuelCost / distance).toFixed(2) : '0.00';
+    return `${metricConfig.prefix || ''}${costPerKm}${metricConfig.suffix || ''}`;
   }
   return '0';
 }
@@ -217,11 +227,11 @@ export default function DynamicSection({ sectionId }) {
 
       {/* Metrics */}
       {loading ? (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '12px', marginBottom: '20px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: '12px', marginBottom: '20px' }}>
           {[1,2,3,4].map(i => <div key={i} style={{ height: 80, background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-color)' }} />)}
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '12px', marginBottom: '20px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: '12px', marginBottom: '20px' }}>
           {config.metrics.map(m => (
             <MetricCard key={m.label} label={m.label} value={data.length > 0 ? computeMetric(data, m) : '—'} color={m.color} />
           ))}

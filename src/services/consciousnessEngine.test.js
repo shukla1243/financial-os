@@ -1,4 +1,4 @@
-import { findTriggeredSectionIds, SECTION_DEFINITIONS, readDynamicSheet } from './consciousnessEngine';
+import { enrichVehicleRows, findTriggeredSectionIds, SECTION_DEFINITIONS, readDynamicSheet } from './consciousnessEngine';
 
 jest.mock('./proxyService', () => ({
   getDynamicSheet: jest.fn(),
@@ -52,5 +52,15 @@ test('vehicle OS read repairs structured fields from notes and removes duplicate
 
   await expect(readDynamicSheet('proxy', 'user@example.com', 'VehicleLog')).resolves.toEqual([
     expect.objectContaining({ Date: '2026-06-11', Odometer: 9771, PricePerLitre: 114, LitresFilled: 1.76 }),
+  ]);
+});
+
+test('vehicle OS calculates distance traveled and cost per km from odometer intervals', () => {
+  expect(enrichVehicleRows([
+    { FuelAmount: 201, Odometer: 9060 },
+    { FuelAmount: 201, Odometer: 9771 },
+  ])).toEqual([
+    expect.objectContaining({ DistanceTraveled: '', CostPerKm: '' }),
+    expect.objectContaining({ DistanceTraveled: 711, CostPerKm: 0.28 }),
   ]);
 });
