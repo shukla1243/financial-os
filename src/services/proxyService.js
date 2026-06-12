@@ -244,7 +244,7 @@ export async function testProxyConnection(proxyUrl) {
     const res = await fetchWithTimeout(proxyUrl, { method: 'GET' });
     if (!res.ok) return { success: false, error: `HTTP ${res.status}` };
     const data = await res.json();
-    return { success: data.success === true, status: data.status };
+    return { success: data.success === true, status: data.status, apiVersion: Number(data.apiVersion) || 0 };
   } catch (e) {
     return { success: false, error: e.message };
   }

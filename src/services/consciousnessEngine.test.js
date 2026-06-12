@@ -1,4 +1,8 @@
-import { findTriggeredSectionIds, SECTION_DEFINITIONS } from './consciousnessEngine';
+import { findTriggeredSectionIds, SECTION_DEFINITIONS, readDynamicSheet } from './consciousnessEngine';
+
+jest.mock('./proxyService', () => ({
+  getDynamicSheet: jest.fn(),
+}));
 
 test('vehicle expenses trigger Vehicle OS', () => {
   expect(findTriggeredSectionIds([
@@ -36,5 +40,17 @@ test('vehicle OS row preserves expense date and calculates litres', () => {
     id: 'expense-1',
   })).toEqual([
     '2026-06-06', 'Jun', 2026, 201, 9890, 114, '1.76', '', 'Fuel refill', 'expense-1',
+  ]);
+});
+
+test('vehicle OS read repairs structured fields from notes and removes duplicates', async () => {
+  const { getDynamicSheet } = require('./proxyService');
+  getDynamicSheet.mockResolvedValue([
+    { Date: '2026-06-11T18:30:00.000Z', FuelAmount: 201, Odometer: '', PricePerLitre: 0, Note: 'Odometer: 9771 km | Price per litre: ₹114' },
+    { Date: '2026-06-11T18:30:00.000Z', FuelAmount: 201, Odometer: '', PricePerLitre: 0, Note: 'Odometer: 9771 km | Price per litre: ₹114' },
+  ]);
+
+  await expect(readDynamicSheet('proxy', 'user@example.com', 'VehicleLog')).resolves.toEqual([
+    expect.objectContaining({ Date: '2026-06-11', Odometer: 9771, PricePerLitre: 114, LitresFilled: 1.76 }),
   ]);
 });

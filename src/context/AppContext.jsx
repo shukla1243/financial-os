@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer, useEffect, useCallback, useRef } from 'react';
-import { PROXY_URL, GEMINI_KEY as DEFAULT_GEMINI_KEY } from '../config';
+import { PROXY_URL, GEMINI_KEY as DEFAULT_GEMINI_KEY, BACKEND_API_VERSION } from '../config';
 import {
   logExpense as proxyLogExpense,
   deleteExpense as proxyDeleteExpense,
@@ -14,6 +14,7 @@ import {
   getDynamicSheet,
   completeOnboarding as proxyCompleteOnboarding,
   saveConfig as proxySaveConfig,
+  testProxyConnection,
 } from '../services/proxyService';
 import { autoLogExpenseToSections, runConsciousnessScan, readBlueprint } from '../services/consciousnessEngine';
 import { resolveAllInvestments } from '../services/walletService';
@@ -380,6 +381,11 @@ export function AppProvider({ children }) {
     const autoInit = async () => {
       try {
         dispatch({ type: 'SET_INITIALIZATION_ERROR', payload: '' });
+        const backendStatus = await testProxyConnection(PROXY_URL);
+        if (!backendStatus.success) throw new Error('Workspace service is unreachable.');
+        if (backendStatus.apiVersion < BACKEND_API_VERSION) {
+          throw new Error(`Workspace backend is outdated (v${backendStatus.apiVersion || 1}). Redeploy the latest Apps Script Code.gs as a new web-app version.`);
+        }
         // 1. Get user status (Suspended Check)
         let isUserSuspended = false;
         let suspendReasonText = '';
@@ -582,8 +588,9 @@ export function AppProvider({ children }) {
     dispatch({ type: 'ADD_XP', payload: 10 });
     const { proxyUrl, connected } = state.sheetsConfig;
     const email = state.user?.email;
+    let synced = false;
     if (connected && proxyUrl && email) {
-      const synced = await proxyLogExpense(proxyUrl, email, expenseWithId).then(() => true).catch(() => false);
+      synced = await proxyLogExpense(proxyUrl, email, expenseWithId).then(() => true).catch(() => false);
       const existingSectionIds = state.appBlueprint.map(section => section.SectionID);
       if (!synced) queueFailedWrite('expense', expenseWithId, 'Expense');
       let createdSections = [];
@@ -608,6 +615,8 @@ export function AppProvider({ children }) {
         });
       });
     } else queueFailedWrite('expense', expenseWithId, 'Expense');
+    if (synced) dispatch({ type: 'SET_SYNC_STATUS', payload: { status: 'success', time: new Date().toISOString() } });
+    return { synced, queued: !synced, expense: expenseWithId };
   }, [state.sheetsConfig, state.user, state.appBlueprint, queueFailedWrite]);
 
   // ─── DELETE EXPENSE ──────────────────────────────────────────────────────────

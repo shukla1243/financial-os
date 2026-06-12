@@ -12,6 +12,7 @@
 import { readBlueprint as proxyReadBlueprint, writeToBlueprint as proxyWriteToBlueprint } from './proxyService';
 import { callAI } from './aiService';
 import { sanitizeAITextForDisplay } from './aiOutputGuard';
+import { enrichExpenseContext } from './transactionNormalizer';
 
 // Known OS section triggers
 const SECTION_TRIGGERS = {
@@ -148,7 +149,33 @@ export async function autoLogExpenseToSections(proxyUrl, email, expense, existin
 
 export async function readDynamicSheet(proxyUrl, email, sheetName) {
   const { getDynamicSheet } = await import('./proxyService');
-  return getDynamicSheet(proxyUrl, email, sheetName);
+  const rows = await getDynamicSheet(proxyUrl, email, sheetName);
+  if (sheetName !== 'VehicleLog') return rows;
+
+  const seen = new Set();
+  return rows
+    .map(row => {
+      const context = enrichExpenseContext({
+        note: row.Note,
+        odometer: row.Odometer,
+        pricePerLitre: row.PricePerLitre,
+      });
+      const fuelAmount = Number(row.FuelAmount) || 0;
+      const pricePerLitre = Number(context.pricePerLitre) || 0;
+      return {
+        ...row,
+        Date: String(row.Date || '').split('T')[0],
+        Odometer: context.odometer || '',
+        PricePerLitre: pricePerLitre || '',
+        LitresFilled: Number(row.LitresFilled) || (pricePerLitre > 0 ? Number((fuelAmount / pricePerLitre).toFixed(2)) : ''),
+      };
+    })
+    .filter(row => {
+      const signature = row.ClientID || [row.Date, row.FuelAmount, row.Odometer, row.PricePerLitre, row.Note].join('|');
+      if (seen.has(signature)) return false;
+      seen.add(signature);
+      return row.Date || row.FuelAmount || row.Odometer || row.Note;
+    });
 }
 
 // ─── MAIN CONSCIOUSNESS SCAN ──────────────────────────────────────────────────

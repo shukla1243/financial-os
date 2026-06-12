@@ -405,15 +405,13 @@ export default function AILogger() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, pendingExpenses, pendingNewCategories, pendingIncome, pendingGoals, pendingBills]);
 
-  const parseWithGemini = async (text, history = []) => {
+  const parseWithGemini = async (text) => {
     if (!state.geminiKey) return { error: 'No OpenRouter API key set. Contact your system admin to configure it.' };
     try {
       const systemPrompt = buildDynamicSystemPrompt(state);
-      const contents = history.map(m => ({
-        role: m.role === 'ai' ? 'assistant' : 'user',
-        content: m.text
-      }));
-      contents.push({ role: 'user', content: text });
+      // Current financial state is already embedded in the system prompt.
+      // Replaying old assistant cards can make free models repeat stale actions.
+      const contents = [{ role: 'user', content: text }];
 
       const data = await callAI({
         systemInstruction: systemPrompt,
@@ -462,7 +460,7 @@ export default function AILogger() {
     }).catch(() => {});
 
     try {
-      const parsedResult = await parseWithGemini(userMsg, messages);
+      const parsedResult = await parseWithGemini(userMsg);
       const result = guardParsedActions(parsedResult, userMsg, state);
       if (result.error) {
         setMessages(prev => [...prev, { role: 'ai', text: `⚠️ ${result.error}` }]);
@@ -572,10 +570,15 @@ export default function AILogger() {
     if (submittingActions[key]) return;
     setSubmittingActions(prev => ({ ...prev, [key]: true }));
     try {
-      await addExpense(expense);
+      const syncResult = await addExpense(expense);
       setPendingExpenses(prev => prev.filter(e => e !== expense));
       setLoggedCount(c => c + 1);
-      setMessages(prev => [...prev, { role: 'ai', text: `✅ Logged ₹${expense.amount?.toLocaleString()} for "${expense.description}". Anything else?` }]);
+      setMessages(prev => [...prev, {
+        role: 'ai',
+        text: syncResult?.synced
+          ? `✅ Logged ₹${expense.amount?.toLocaleString()} for "${expense.description}" and confirmed it in Sheets.`
+          : `⚠️ Saved ₹${expense.amount?.toLocaleString()} for "${expense.description}" locally, but Sheets has not confirmed it yet. It remains queued for retry.`,
+      }]);
     } catch (e) {
       console.error(e);
     } finally {

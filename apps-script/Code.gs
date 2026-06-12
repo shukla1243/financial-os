@@ -137,7 +137,7 @@ function doPost(e) {
 
 function doGet(e) {
   // Health check
-  return jsonResponse({ success: true, status: 'Financial OS Backend Running' });
+  return jsonResponse({ success: true, status: 'Financial OS Backend Running', apiVersion: 2 });
 }
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
@@ -1047,6 +1047,7 @@ function loadAll(ssId, email) {
 
     return {
       success: true,
+      apiVersion: 2,
       isAdmin: !!ADMIN_EMAIL && email.toLowerCase() === ADMIN_EMAIL.toLowerCase(),
       tracker: expensesResult.data,
       income: incomeResult.data,

@@ -22,3 +22,4 @@ export const GEMINI_KEY = 'server-managed';
 // ─── APP META ─────────────────────────────────────────────────────────────────
 export const APP_VERSION = '4.0.0';
 export const APP_NAME = 'Financial OS';
+export const BACKEND_API_VERSION = 2;

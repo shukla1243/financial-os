@@ -26,3 +26,14 @@ test('normalizes income month and year too', () => {
     amount: 500,
   });
 });
+
+test('extracts vehicle context from a note when AI misses structured fields', () => {
+  expect(normalizeExpense({
+    description: 'Fuel refill',
+    amount: 201,
+    note: 'Odometer: 9771 km | Price per litre: ₹114',
+  }, new Date(2026, 5, 11))).toMatchObject({
+    odometer: 9771,
+    pricePerLitre: 114,
+  });
+});
