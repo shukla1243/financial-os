@@ -4,6 +4,7 @@ import { AlertTriangle, Bot, DollarSign, Flame, Plus, Shield, Sparkles, Target, 
 import { useApp } from '../context/AppContext';
 import { COINGECKO_MAPPING, fetchCoinGeckoPrices } from '../services/walletService';
 import { ActionButton, AnimePanel, ProgressLine, RankBadge, SectionHeading, StatPanel } from '../components/AnimeUI';
+import { calculateGoalSavings, calculateNetWorth } from '../services/netWorth';
 
 const CAT_COLORS = { Housing:'#a855f7', Food:'#f472b6', Health:'#10b981', Telecom:'#22d3ee', Subscriptions:'#fbbf24', Transport:'#f59e0b', Savings:'#10b981', Other:'#64748b' };
 
@@ -48,8 +49,8 @@ export default function Dashboard() {
     const price = cryptoPrices[COINGECKO_MAPPING[symbol] || symbol]?.inr || parseFloat(i.CurrentValue || i.currentValue) || 0;
     return sum + (parseFloat(i.Units || i.units) || 0) * price;
   }, 0);
-  const goalSavingsValue = savingsGoals.reduce((sum, goal) => sum + (Number(goal.saved) || 0), 0);
-  const netWorth = buffer + goalSavingsValue + sipValue + cryptoValue;
+  const goalSavingsValue = calculateGoalSavings(savingsGoals);
+  const netWorth = calculateNetWorth({ cashBuffer: buffer, savings: goalSavingsValue, investments: sipValue, crypto: cryptoValue });
   const overBudget = Object.entries(config.budgets || {}).filter(([cat, budget]) => (categorySpend[cat] || 0) > budget && budget > 0);
   const score = financialHealthScore ?? 0;
   const achievementCount = [parseFloat(savingsRate) >= 20, activeTransactions.length >= 5, score >= 70, savingsGoals.length > 0].filter(Boolean).length;
@@ -113,7 +114,7 @@ export default function Dashboard() {
           <AnimePanel accent="cyan">
             <SectionHeading eyebrow="ASSET LOADOUT" title="Net Worth" />
             <div className="net-worth-value">₹{netWorth.toLocaleString()}</div>
-            <div className="asset-list"><span>Cash buffer <strong>₹{buffer.toLocaleString()}</strong></span><span>Goal savings <strong>₹{goalSavingsValue.toLocaleString()}</strong></span><span>SIP value <strong>₹{sipValue.toLocaleString()}</strong></span><span>Crypto <strong>₹{cryptoValue.toLocaleString()}</strong></span></div>
+            <div className="asset-list"><span>Cash buffer <strong>₹{buffer.toLocaleString()}</strong></span><span className="asset-list__savings">Savings <strong>₹{goalSavingsValue.toLocaleString()}</strong></span><span>SIP value <strong>₹{sipValue.toLocaleString()}</strong></span><span>Crypto <strong>₹{cryptoValue.toLocaleString()}</strong></span></div>
           </AnimePanel>
           <AnimePanel accent="pink">
             <SectionHeading eyebrow="COMPANION SIGNAL" title="AI Insight" />

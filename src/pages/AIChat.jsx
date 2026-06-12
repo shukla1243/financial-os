@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
+import { calculateGoalSavings, calculateNetWorth } from '../services/netWorth';
 import { Send, Bot, User, Sparkles, TrendingUp, HelpCircle, Target, Calendar } from 'lucide-react';
 import { callAI } from '../services/aiService';
 import { sanitizeAITextForDisplay } from '../services/aiOutputGuard';
@@ -61,7 +62,8 @@ export default function AIChat() {
 
     const sipValue = investments.filter(i => i.type === 'SIP').reduce((s, i) => s + (i.currentValue || 0), 0);
     const cryptoValue = investments.filter(i => i.type === 'Crypto').reduce((s, i) => s + (i.currentValue || 0), 0);
-    const netWorth = buffer + sipValue + cryptoValue;
+    const goalSavingsValue = calculateGoalSavings(savingsGoals);
+    const netWorth = calculateNetWorth({ cashBuffer: buffer, savings: goalSavingsValue, investments: sipValue, crypto: cryptoValue });
 
     const memories = aiMemory.slice(-15).map(m => `- ${m.date || ''} [${m.type}]: ${m.observation}`).join('\n');
 
@@ -106,6 +108,7 @@ ${billsText}
 
 NET WORTH:
 Cash Buffer: ₹${buffer.toLocaleString()}
+Savings: ₹${goalSavingsValue.toLocaleString()}
 SIP Value: ₹${sipValue.toLocaleString()}
 Crypto: ₹${cryptoValue.toLocaleString()}
 Total: ₹${netWorth.toLocaleString()}
