@@ -4,6 +4,7 @@ import {
   logExpense as proxyLogExpense,
   deleteExpense as proxyDeleteExpense,
   logIncome as proxyLogIncome,
+  logSavingsContribution as proxyLogSavingsContribution,
   writeGoals,
   writeBills,
   writeMemory,
@@ -26,6 +27,7 @@ import { chooseLatestTheme, normalizeTheme } from '../services/themeEngine';
 import { normalizeExpense, normalizeIncome } from '../services/transactionNormalizer';
 import { flushSyncOutbox, queueSyncOperation } from '../services/syncOutbox';
 import { evolveFromExpense } from '../services/evolutionEngine';
+import { calculateSavingsAccounting, createGoalContribution, normalizeSavingsContribution } from '../services/savingsAccounting';
 
 const AppContext = createContext();
 
@@ -60,6 +62,7 @@ export const createDefaultState = () => ({
     income: [],
     investments: [],
     savingsGoals: [],
+    savingsContributions: [],
     billCalendar: [],
     monthlySnapshots: [],
     aiMemory: [],
@@ -172,6 +175,8 @@ function reducer(state, action) {
       return { ...state, savingsGoals: state.savingsGoals.map(g => g.id === action.payload.id ? { ...g, ...action.payload } : g) };
     case 'ADD_GOAL':
       return { ...state, savingsGoals: [...state.savingsGoals, { ...action.payload, id: action.payload.id || Date.now() }] };
+    case 'ADD_SAVINGS_CONTRIBUTION':
+      return { ...state, savingsContributions: [...state.savingsContributions, action.payload] };
     case 'SET_GOALS':
       return { ...state, savingsGoals: action.payload };
     case 'DELETE_GOAL':
@@ -232,6 +237,7 @@ function reducer(state, action) {
         income: (action.payload.income || []).map(item => normalizeIncome(item)),
         investments: action.payload.investments || [],
         savingsGoals: action.payload.savingsGoals || [],
+        savingsContributions: (action.payload.savingsContributions || []).map(item => normalizeSavingsContribution(item)),
         billCalendar: action.payload.billCalendar || [],
         aiMemory: action.payload.aiMemory || [],
         config: {
@@ -310,6 +316,7 @@ function reducer(state, action) {
         user: action.payload.user || null,
         profile: action.payload.profile || null,
         savingsGoals: action.payload.savingsGoals || state.savingsGoals,
+        savingsContributions: action.payload.savingsContributions || [],
         investments: action.payload.investments || [],
         appBlueprint: action.payload.appBlueprint || [],
         isSuspended: action.payload.isSuspended ?? false,
@@ -480,6 +487,7 @@ export function AppProvider({ children }) {
         income: state.income,
         investments: state.investments,
         savingsGoals: state.savingsGoals,
+        savingsContributions: state.savingsContributions,
         billCalendar: state.billCalendar,
         monthlySnapshots: state.monthlySnapshots,
         aiMemory: state.aiMemory,
@@ -672,25 +680,47 @@ export function AppProvider({ children }) {
   // ─── ADD GOAL ─────────────────────────────────────────────────────────────
   const addGoal = useCallback(async (goal) => {
     const newGoal = { ...goal, id: goal.id || Date.now() };
+    const initialContribution = Number(newGoal.saved) > 0
+      ? normalizeSavingsContribution({ goalId: newGoal.id, goalName: newGoal.name, amount: Number(newGoal.saved) })
+      : null;
     dispatch({ type: 'ADD_GOAL', payload: newGoal });
+    if (initialContribution) dispatch({ type: 'ADD_SAVINGS_CONTRIBUTION', payload: initialContribution });
     dispatch({ type: 'ADD_XP', payload: 15 });
     const { proxyUrl, connected } = state.sheetsConfig;
     const email = state.user?.email;
+    const updatedGoals = [...state.savingsGoals, newGoal];
     if (connected && proxyUrl && email) {
-      const updatedGoals = [...state.savingsGoals, newGoal];
       await writeGoals(proxyUrl, email, updatedGoals).catch(() => queueFailedWrite('goals', updatedGoals, 'Goal'));
-    } else queueFailedWrite('goals', [...state.savingsGoals, newGoal], 'Goal');
+      if (initialContribution) {
+        await proxyLogSavingsContribution(proxyUrl, email, initialContribution)
+          .catch(() => queueFailedWrite('savingsContribution', initialContribution, 'Savings contribution'));
+      }
+    } else {
+      queueFailedWrite('goals', updatedGoals, 'Goal');
+      if (initialContribution) queueFailedWrite('savingsContribution', initialContribution, 'Savings contribution');
+    }
   }, [state.sheetsConfig, state.user, state.savingsGoals, queueFailedWrite]);
 
   // ─── UPDATE GOAL ─────────────────────────────────────────────────────────────
   const updateGoal = useCallback(async (goal) => {
+    const previousGoal = state.savingsGoals.find(g => g.id === goal.id);
+    const nextGoal = previousGoal ? { ...previousGoal, ...goal } : goal;
+    const contribution = createGoalContribution(previousGoal, nextGoal);
     dispatch({ type: 'UPDATE_GOAL', payload: goal });
+    if (contribution) dispatch({ type: 'ADD_SAVINGS_CONTRIBUTION', payload: contribution });
     const { proxyUrl, connected } = state.sheetsConfig;
     const email = state.user?.email;
+    const updatedGoals = state.savingsGoals.map(g => g.id === goal.id ? { ...g, ...goal } : g);
     if (connected && proxyUrl && email) {
-      const updatedGoals = state.savingsGoals.map(g => g.id === goal.id ? { ...g, ...goal } : g);
       await writeGoals(proxyUrl, email, updatedGoals).catch(() => queueFailedWrite('goals', updatedGoals, 'Goal update'));
-    } else queueFailedWrite('goals', state.savingsGoals.map(g => g.id === goal.id ? { ...g, ...goal } : g), 'Goal update');
+      if (contribution) {
+        await proxyLogSavingsContribution(proxyUrl, email, contribution)
+          .catch(() => queueFailedWrite('savingsContribution', contribution, 'Savings contribution'));
+      }
+    } else {
+      queueFailedWrite('goals', updatedGoals, 'Goal update');
+      if (contribution) queueFailedWrite('savingsContribution', contribution, 'Savings contribution');
+    }
   }, [state.sheetsConfig, state.user, state.savingsGoals, queueFailedWrite]);
 
   const deleteGoal = useCallback(async (goalId) => {
@@ -808,6 +838,13 @@ export function AppProvider({ children }) {
   const extraIncome = currentMonthIncome.reduce((sum, i) => sum + (i.amount || 0), 0);
   const totalIncome = baseIncome + extraIncome;
   const totalExpenses = currentMonthExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+  const savingsAccounting = calculateSavingsAccounting({
+    totalIncome,
+    totalExpenses,
+    contributions: state.savingsContributions,
+    month: currentMonth,
+    year: currentYear,
+  });
   const categorySpend = {};
   Object.keys(state.config.budgets).forEach(cat => {
     categorySpend[cat] = currentMonthExpenses.filter(e => e.category === cat).reduce((sum, e) => sum + e.amount, 0);
@@ -820,8 +857,10 @@ export function AppProvider({ children }) {
     totalExpenses,
     totalBudget: Object.values(state.config.budgets).reduce((a, b) => a + b, 0),
     categorySpend,
-    buffer: totalIncome - totalExpenses,
-    savingsRate: totalIncome > 0 ? ((totalIncome - totalExpenses) / totalIncome * 100).toFixed(1) : '0',
+    totalSavings: savingsAccounting.totalSavings,
+    grossSurplus: savingsAccounting.grossSurplus,
+    buffer: savingsAccounting.buffer,
+    savingsRate: savingsAccounting.savingsRate,
     baseIncome,
     extraIncome,
   };
@@ -836,9 +875,10 @@ export function AppProvider({ children }) {
       goals: state.savingsGoals,
       hasTransactions: state.tracker.length > 0,
       hasIncomeEntries: state.income.length > 0,
+      hasSavingsActivity: state.savingsContributions.length > 0,
     });
     if (score !== state.financialHealthScore) dispatch({ type: 'SET_HEALTH_SCORE', payload: score });
-  }, [computed.totalIncome, computed.savingsRate, computed.categorySpend, state.tracker.length, state.income.length, state.config.budgets, state.savingsGoals, state.financialHealthScore]);
+  }, [computed.totalIncome, computed.savingsRate, computed.categorySpend, state.tracker.length, state.income.length, state.savingsContributions.length, state.config.budgets, state.savingsGoals, state.financialHealthScore]);
 
   return (
     <AppContext.Provider value={{ state, dispatch, computed, addExpense, deleteExpense, addNewCategory, syncFromSheets, addIncome, addGoal, updateGoal, deleteGoal, updateBill, addMemoryFact, updateTheme, completeOnboarding, saveSettings }}>

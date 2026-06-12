@@ -4,6 +4,7 @@ import { useApp } from '../context/AppContext';
 import { callAI } from '../services/aiService';
 import { sanitizeAITextForDisplay } from '../services/aiOutputGuard';
 import { AnimePanel, ProgressLine, RankBadge, SectionHeading, StatPanel } from '../components/AnimeUI';
+import { calculateSavingsAccounting } from '../services/savingsAccounting';
 
 export default function MonthlyReport() {
   const { state } = useApp();
@@ -17,8 +18,13 @@ export default function MonthlyReport() {
   const extraIncome = reportIncome.reduce((sum, item) => sum + (item.amount || 0), 0);
   const totalIncome = baseIncome + extraIncome;
   const totalExpenses = reportExpenses.reduce((sum, item) => sum + (item.amount || 0), 0);
-  const buffer = totalIncome - totalExpenses;
-  const savingsRate = totalIncome > 0 ? ((buffer / totalIncome) * 100).toFixed(1) : '0';
+  const { totalSavings, buffer, savingsRate } = calculateSavingsAccounting({
+    totalIncome,
+    totalExpenses,
+    contributions: state.savingsContributions,
+    month: selectedMonth,
+    year: selectedYear,
+  });
   const categorySpend = Object.fromEntries(Object.keys(state.config.budgets || {}).map(cat => [cat, reportExpenses.filter(item => item.category === cat).reduce((sum, item) => sum + item.amount, 0)]));
   const topExpenses = [...reportExpenses].sort((a, b) => b.amount - a.amount).slice(0, 3);
   const budgetWins = Object.entries(state.config.budgets || {}).filter(([cat, budget]) => budget > 0 && (categorySpend[cat] || 0) <= budget).length;
@@ -33,7 +39,7 @@ export default function MonthlyReport() {
       }
       setLoadingCritique(true);
       const categoryData = Object.entries(state.config.budgets || {}).map(([cat, budget]) => `${cat}: ₹${categorySpend[cat] || 0} spent vs ₹${budget} planned`).join('\n');
-      const prompt = `You are the Financial OS Companion. Analyze ${selectedMonth} ${selectedYear}. Income ₹${totalIncome}, expenses ₹${totalExpenses}, buffer ₹${buffer}, savings rate ${savingsRate}%. Categories:\n${categoryData}\nWrite exactly 3 concise warm sentences. Mention a specific win and one practical next mission. Plain text only.`;
+      const prompt = `You are the Financial OS Companion. Analyze ${selectedMonth} ${selectedYear}. Income ₹${totalIncome}, expenses ₹${totalExpenses}, goal savings ₹${totalSavings}, spendable buffer ₹${buffer}, savings rate ${savingsRate}%. Categories:\n${categoryData}\nWrite exactly 3 concise warm sentences. Mention a specific win and one practical next mission. Plain text only.`;
       try {
         const response = await callAI({ contents: prompt, key: state.geminiKey, temperature: 0.75 });
         if (!cancelled) setCritique(sanitizeAITextForDisplay(response.candidates?.[0]?.content?.parts?.[0]?.text, 'No debrief generated.'));
@@ -45,7 +51,7 @@ export default function MonthlyReport() {
     };
     generate();
     return () => { cancelled = true; };
-  }, [selectedMonth, selectedYear, state.geminiKey]);
+  }, [selectedMonth, selectedYear, state.geminiKey, totalIncome, totalExpenses, totalSavings, buffer, savingsRate]);
 
   return (
     <div className="anime-page report-page">
@@ -71,7 +77,7 @@ export default function MonthlyReport() {
       <div className="report-stat-grid">
         <StatPanel label="Income gathered" value={`₹${totalIncome.toLocaleString()}`} sub={`₹${extraIncome.toLocaleString()} bonus income`} icon={TrendingUp} tone="cyan" />
         <StatPanel label="Damage taken" value={`₹${totalExpenses.toLocaleString()}`} sub={`${reportExpenses.length} expense events`} icon={TrendingDown} tone="pink" delay={0.06} />
-        <StatPanel label="Power retained" value={`₹${buffer.toLocaleString()}`} sub={`${savingsRate}% savings rate`} icon={Award} tone="green" delay={0.12} />
+        <StatPanel label="Goal savings" value={`₹${totalSavings.toLocaleString()}`} sub={`${savingsRate}% savings rate · ₹${buffer.toLocaleString()} spendable`} icon={Award} tone="green" delay={0.12} />
       </div>
 
       <div className="report-story-grid">

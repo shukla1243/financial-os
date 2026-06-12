@@ -31,3 +31,12 @@ test('negative savings cannot produce a negative score', () => {
     hasTransactions: true,
   })).toBe(0);
 });
+
+test('goal savings activity can initialize the health score', () => {
+  expect(calculateFinancialHealth({
+    totalIncome: 10000,
+    savingsRate: 20,
+    goals: [{ saved: 2000 }],
+    hasSavingsActivity: true,
+  })).toBe(53);
+});

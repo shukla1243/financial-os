@@ -23,7 +23,7 @@ const ALLOWED_ACTIONS = [
   'initUser', 'getUserStatus', 'getAdminRegistry', 'toggleUserStatus', 'toggleUserPlan',
   'getConfig', 'setConfig', 'setConfigBatch', 'completeOnboarding',
   'getExpenses', 'logExpense', 'deleteExpense', 'getIncome', 'logIncome', 'getInvestments', 'logInvestment',
-  'getGoals', 'setGoals', 'getBills', 'setBills', 'getMemory', 'logMemory',
+  'getGoals', 'setGoals', 'getSavingsContributions', 'logSavingsContribution', 'getBills', 'setBills', 'getMemory', 'logMemory',
   'getBlueprint', 'setBlueprint', 'logSnapshot', 'checkUpdates', 'loadAll',
   'createDynamicSheet', 'getDynamicSheet', 'appendDynamicRow', 'callAI',
 ];
@@ -38,6 +38,7 @@ const SCHEMAS = {
   Income:          ['Email', 'Month', 'Year', 'Date', 'Type', 'Source', 'Amount', 'Note', 'ClientID'],
   Investments:     ['Email', 'Date', 'Type', 'Fund_Coin', 'Units', 'BuyPrice', 'CurrentValue', 'Platform', 'Note', 'ClientID'],
   SavingsGoals:    ['Email', 'ID', 'GoalName', 'Target', 'Saved', 'MonthlyAdd', 'Deadline', 'Icon', 'Color', 'Status'],
+  SavingsContributions: ['Email', 'Date', 'Month', 'Year', 'GoalID', 'GoalName', 'Amount', 'ClientID'],
   MonthlySnapshot: ['Email', 'Month', 'Year', 'Income', 'ExtraIncome', 'Expenses', 'Savings', 'Buffer', 'SavingsRate', 'TopCategory', 'Notes'],
   AIMemory:        ['Email', 'Date', 'Type', 'Observation'],
   BillCalendar:    ['Email', 'ID', 'BillName', 'Amount', 'DueDate', 'Frequency', 'Category', 'Status', 'LastPaid'],
@@ -117,6 +118,8 @@ function doPost(e) {
       case 'logInvestment':  result = logInvestment(userSsId, email, data); break;
       case 'getGoals':       result = getGoals(userSsId, email); break;
       case 'setGoals':       result = setGoals(userSsId, email, data); break;
+      case 'getSavingsContributions': result = getSavingsContributions(userSsId, email); break;
+      case 'logSavingsContribution': result = logSavingsContribution(userSsId, email, data); break;
       case 'getBills':       result = getBills(userSsId, email); break;
       case 'setBills':       result = setBills(userSsId, email, data); break;
       case 'getMemory':      result = getMemory(userSsId, email); break;
@@ -139,7 +142,7 @@ function doPost(e) {
 
 function doGet(e) {
   // Health check
-  return jsonResponse({ success: true, status: 'Financial OS Backend Running', apiVersion: 4 });
+  return jsonResponse({ success: true, status: 'Financial OS Backend Running', apiVersion: 5 });
 }
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
@@ -960,6 +963,46 @@ function setGoals(ssId, email, goals) {
   }
 }
 
+function getSavingsContributions(ssId, email) {
+  try {
+    const rows = readUserRows(ssId, 'SavingsContributions', email);
+    const data = rows.map(({ obj }) => ({
+      id: obj.ClientID || '',
+      date: obj.Date || '',
+      month: obj.Month || '',
+      year: parseInt(obj.Year) || new Date().getFullYear(),
+      goalId: obj.GoalID || '',
+      goalName: obj.GoalName || 'Savings goal',
+      amount: parseFloat(obj.Amount) || 0,
+    }));
+    return { success: true, data };
+  } catch (err) {
+    return { success: false, error: err.toString(), data: [] };
+  }
+}
+
+function logSavingsContribution(ssId, email, contribution) {
+  try {
+    const clientId = String(contribution.id || contribution.ClientID || '');
+    if (clientId) {
+      const duplicate = readUserRows(ssId, 'SavingsContributions', email)
+        .some(({ obj }) => String(obj.ClientID || '') === clientId);
+      if (duplicate) return { success: true, duplicate: true };
+    }
+    return appendUserRow(ssId, 'SavingsContributions', email, [
+      contribution.date || '',
+      contribution.month || '',
+      parseInt(contribution.year) || new Date().getFullYear(),
+      contribution.goalId || '',
+      contribution.goalName || 'Savings goal',
+      Number(contribution.amount) || 0,
+      clientId,
+    ]);
+  } catch (err) {
+    return { success: false, error: err.toString() };
+  }
+}
+
 function getBills(ssId, email) {
   try {
     const rows = readUserRows(ssId, 'BillCalendar', email);
@@ -1080,10 +1123,11 @@ function loadAll(ssId, email) {
     const expensesResult = getExpenses(ssId, email);
     const incomeResult = getIncome(ssId, email);
     const goalsResult = getGoals(ssId, email);
+    const savingsContributionsResult = getSavingsContributions(ssId, email);
     const billsResult = getBills(ssId, email);
     const memoryResult = getMemory(ssId, email);
     const blueprintResult = getBlueprint(ssId, email);
-    const requiredResults = [configResult, expensesResult, incomeResult, goalsResult, billsResult, memoryResult, blueprintResult];
+    const requiredResults = [configResult, expensesResult, incomeResult, goalsResult, savingsContributionsResult, billsResult, memoryResult, blueprintResult];
     const failedResult = requiredResults.find(result => !result.success);
     if (failedResult) return { success: false, error: failedResult.error || 'Could not load user workspace.' };
 
@@ -1095,11 +1139,12 @@ function loadAll(ssId, email) {
 
     return {
       success: true,
-      apiVersion: 4,
+      apiVersion: 5,
       isAdmin: !!ADMIN_EMAIL && email.toLowerCase() === ADMIN_EMAIL.toLowerCase(),
       tracker: expensesResult.data,
       income: incomeResult.data,
       savingsGoals: goalsResult.data,
+      savingsContributions: savingsContributionsResult.data,
       billCalendar: billsResult.data,
       aiMemory: memoryResult.data,
       blueprint: blueprintResult.data,

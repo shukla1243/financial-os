@@ -181,6 +181,15 @@ export async function readGoals(proxyUrl, email) {
   return result.success ? result.data : [];
 }
 
+export async function logSavingsContribution(proxyUrl, email, contribution) {
+  return proxyMutation(proxyUrl, 'logSavingsContribution', email, contribution);
+}
+
+export async function readSavingsContributions(proxyUrl, email) {
+  const result = await proxyPost(proxyUrl, 'getSavingsContributions', email);
+  return result.success ? result.data : [];
+}
+
 // ─── BILL CALENDAR ───────────────────────────────────────────────────────────
 
 export async function writeBills(proxyUrl, email, bills) {

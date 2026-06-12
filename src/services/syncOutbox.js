@@ -1,4 +1,4 @@
-import { addCategory, deleteExpense, logExpense, logIncome, writeBills, writeGoals } from './proxyService';
+import { addCategory, deleteExpense, logExpense, logIncome, logSavingsContribution, writeBills, writeGoals } from './proxyService';
 
 const PREFIX = 'financialos:';
 
@@ -52,6 +52,7 @@ async function execute(entry, proxyUrl, email) {
   }
   if (entry.type === 'deleteExpense') return deleteExpense(proxyUrl, email, entry.payload);
   if (entry.type === 'income') return logIncome(proxyUrl, email, entry.payload);
+  if (entry.type === 'savingsContribution') return logSavingsContribution(proxyUrl, email, entry.payload);
   if (entry.type === 'goals') return writeGoals(proxyUrl, email, entry.payload);
   if (entry.type === 'bills') return writeBills(proxyUrl, email, entry.payload);
   if (entry.type === 'category') return addCategory(proxyUrl, email, entry.payload.name, entry.payload.budget);

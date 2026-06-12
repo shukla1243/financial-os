@@ -8,10 +8,11 @@ export function calculateFinancialHealth({
   goals = [],
   hasTransactions = false,
   hasIncomeEntries = false,
+  hasSavingsActivity = false,
 }) {
   const applicableBudgets = Object.entries(budgets).filter(([, budget]) => Number(budget) > 0);
   const hasEnoughData = Number(totalIncome) > 0 &&
-    (hasTransactions || hasIncomeEntries || applicableBudgets.length > 0);
+    (hasTransactions || hasIncomeEntries || hasSavingsActivity || applicableBudgets.length > 0);
 
   if (!hasEnoughData) return null;
 

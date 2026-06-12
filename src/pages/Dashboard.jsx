@@ -25,7 +25,7 @@ function BudgetRow({ name, spent, budget, index }) {
 export default function Dashboard() {
   const { state, computed } = useApp();
   const navigate = useNavigate();
-  const { totalIncome, totalExpenses, buffer, savingsRate, categorySpend, extraIncome } = computed;
+  const { totalIncome, totalExpenses, totalSavings, buffer, savingsRate, categorySpend, extraIncome } = computed;
   const { config, savingsGoals, tracker, aiInsights, financialHealthScore, level, xp } = state;
   const [cryptoPrices, setCryptoPrices] = useState({});
   const today = new Date();
@@ -48,7 +48,8 @@ export default function Dashboard() {
     const price = cryptoPrices[COINGECKO_MAPPING[symbol] || symbol]?.inr || parseFloat(i.CurrentValue || i.currentValue) || 0;
     return sum + (parseFloat(i.Units || i.units) || 0) * price;
   }, 0);
-  const netWorth = buffer + sipValue + cryptoValue;
+  const goalSavingsValue = savingsGoals.reduce((sum, goal) => sum + (Number(goal.saved) || 0), 0);
+  const netWorth = buffer + goalSavingsValue + sipValue + cryptoValue;
   const overBudget = Object.entries(config.budgets || {}).filter(([cat, budget]) => (categorySpend[cat] || 0) > budget && budget > 0);
   const score = financialHealthScore ?? 0;
   const achievementCount = [parseFloat(savingsRate) >= 20, activeTransactions.length >= 5, score >= 70, savingsGoals.length > 0].filter(Boolean).length;
@@ -91,7 +92,7 @@ export default function Dashboard() {
         <StatPanel label="Income power" value={`₹${totalIncome.toLocaleString()}`} sub={`Base ₹${(config.salary + config.homeIncome).toLocaleString()}${extraIncome > 0 ? ` + ₹${extraIncome.toLocaleString()} extra` : ''}`} icon={DollarSign} tone="cyan" />
         <StatPanel label="Expense damage" value={`₹${totalExpenses.toLocaleString()}`} sub={`${activeTransactions.length} transactions this chapter`} icon={TrendingDown} tone="pink" delay={0.06} />
         <StatPanel label="Cash buffer" value={`₹${buffer.toLocaleString()}`} sub={`₹${dailyBudget.toLocaleString()} daily power · ${daysLeft} days left`} icon={Shield} tone="gold" delay={0.12} />
-        <StatPanel label="Savings rate" value={`${savingsRate}%`} sub={parseFloat(savingsRate) >= 20 ? 'Target zone secured' : 'Build toward the 20% zone'} icon={TrendingUp} tone="green" delay={0.18} />
+        <StatPanel label="Savings allocated" value={`₹${totalSavings.toLocaleString()}`} sub={`${savingsRate}% of income moved into goals`} icon={TrendingUp} tone="green" delay={0.18} />
       </div>
 
       <div className="dashboard-command-grid">
@@ -112,7 +113,7 @@ export default function Dashboard() {
           <AnimePanel accent="cyan">
             <SectionHeading eyebrow="ASSET LOADOUT" title="Net Worth" />
             <div className="net-worth-value">₹{netWorth.toLocaleString()}</div>
-            <div className="asset-list"><span>Cash buffer <strong>₹{buffer.toLocaleString()}</strong></span><span>SIP value <strong>₹{sipValue.toLocaleString()}</strong></span><span>Crypto <strong>₹{cryptoValue.toLocaleString()}</strong></span></div>
+            <div className="asset-list"><span>Cash buffer <strong>₹{buffer.toLocaleString()}</strong></span><span>Goal savings <strong>₹{goalSavingsValue.toLocaleString()}</strong></span><span>SIP value <strong>₹{sipValue.toLocaleString()}</strong></span><span>Crypto <strong>₹{cryptoValue.toLocaleString()}</strong></span></div>
           </AnimePanel>
           <AnimePanel accent="pink">
             <SectionHeading eyebrow="COMPANION SIGNAL" title="AI Insight" />
