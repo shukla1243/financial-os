@@ -127,8 +127,13 @@ export default function DynamicSection({ sectionId }) {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
 
-  const config = SECTION_CONFIGS[sectionId];
-  const sheetRef = state.appBlueprint?.find(s => s.SectionID === sectionId)?.SheetRef || sectionId;
+  const blueprintSection = state.appBlueprint?.find(s => s.SectionID === sectionId);
+  let blueprintConfig = null;
+  try {
+    blueprintConfig = blueprintSection?.ConfigJSON ? JSON.parse(blueprintSection.ConfigJSON) : null;
+  } catch (error) {}
+  const config = SECTION_CONFIGS[sectionId] || blueprintConfig;
+  const sheetRef = blueprintSection?.SheetRef || sectionId;
 
   useEffect(() => {
     if (state.sheetsConfig?.proxyUrl && state.user?.email) {
@@ -224,6 +229,26 @@ export default function DynamicSection({ sectionId }) {
       </div>
 
       {error && <div className="system-notice system-notice--danger">{error}</div>}
+
+      {config.reasoning && (
+        <div className="system-notice" style={{ marginBottom: '16px' }}>
+          <div>
+            <strong>WHY THIS OS EXISTS</strong>
+            <span>{config.reasoning}</span>
+          </div>
+        </div>
+      )}
+
+      {config.swot && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: '10px', marginBottom: '18px' }}>
+          {Object.entries(config.swot).map(([key, value]) => (
+            <div className="card" key={key} style={{ padding: '12px' }}>
+              <div style={{ fontSize: '9px', letterSpacing: '1px', color: 'var(--primary-color)', textTransform: 'uppercase', marginBottom: '5px' }}>{key}</div>
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.45 }}>{value || 'Not identified'}</div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Metrics */}
       {loading ? (

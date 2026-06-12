@@ -42,7 +42,7 @@ const SCHEMAS = {
   AIMemory:        ['Email', 'Date', 'Type', 'Observation'],
   BillCalendar:    ['Email', 'ID', 'BillName', 'Amount', 'DueDate', 'Frequency', 'Category', 'Status', 'LastPaid'],
   Accountability:  ['Email', 'Month', 'Year', 'PartnerEmail', 'SavingsRate', 'GoalsHit', 'BudgetAdherence', 'Comment', 'SharedOn'],
-  Blueprint:       ['Email', 'SectionID', 'Name', 'Icon', 'SheetRef', 'Status', 'CreatedOn'],
+  Blueprint:       ['Email', 'SectionID', 'Name', 'Icon', 'SheetRef', 'Status', 'CreatedOn', 'ConfigJSON'],
 };
 
 const REGISTRY_SCHEMA = ['Email', 'UserID', 'Name', 'SpreadsheetID', 'SpreadsheetURL', 'Status', 'CreatedOn', 'LastActiveOn', 'Reason', 'Plan', 'PlanExpiresOn', 'OwnerGift', 'GiftID'];
@@ -139,7 +139,7 @@ function doPost(e) {
 
 function doGet(e) {
   // Health check
-  return jsonResponse({ success: true, status: 'Financial OS Backend Running', apiVersion: 3 });
+  return jsonResponse({ success: true, status: 'Financial OS Backend Running', apiVersion: 4 });
 }
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
@@ -1036,7 +1036,7 @@ function getBlueprint(ssId, email) {
     const rows = readUserRows(ssId, 'Blueprint', email);
     const data = rows.map(({ obj }) => ({
       SectionID: obj.SectionID, Name: obj.Name, Icon: obj.Icon,
-      SheetRef: obj.SheetRef, Status: obj.Status, CreatedOn: obj.CreatedOn,
+      SheetRef: obj.SheetRef, Status: obj.Status, CreatedOn: obj.CreatedOn, ConfigJSON: obj.ConfigJSON || '',
     }));
     return { success: true, data };
   } catch (err) {
@@ -1055,6 +1055,7 @@ function setBlueprint(ssId, email, section) {
       section.SectionID, section.Name, section.Icon,
       section.SheetRef, section.Status || 'Active',
       new Date().toLocaleDateString('en-IN'),
+      section.ConfigJSON || '',
     ]);
   } catch (err) {
     return { success: false, error: err.toString() };
@@ -1094,7 +1095,7 @@ function loadAll(ssId, email) {
 
     return {
       success: true,
-      apiVersion: 3,
+      apiVersion: 4,
       isAdmin: !!ADMIN_EMAIL && email.toLowerCase() === ADMIN_EMAIL.toLowerCase(),
       tracker: expensesResult.data,
       income: incomeResult.data,

@@ -25,6 +25,7 @@ import { restoreAuthenticatedUser } from '../services/googleAuth';
 import { chooseLatestTheme, normalizeTheme } from '../services/themeEngine';
 import { normalizeExpense, normalizeIncome } from '../services/transactionNormalizer';
 import { flushSyncOutbox, queueSyncOperation } from '../services/syncOutbox';
+import { evolveFromExpense } from '../services/evolutionEngine';
 
 const AppContext = createContext();
 
@@ -614,6 +615,32 @@ export function AppProvider({ children }) {
           },
         });
       });
+      if (synced) {
+        try {
+          const evolvedSection = await evolveFromExpense(proxyUrl, email, expenseWithId, state.appBlueprint, {
+            recentExpenses: state.tracker.slice(-30),
+            goals: state.savingsGoals,
+            investments: state.investments,
+            bills: state.billCalendar,
+            budgets: state.config.budgets,
+          });
+          if (evolvedSection) {
+            dispatch({ type: 'ADD_BLUEPRINT_SECTION', payload: evolvedSection });
+            dispatch({
+              type: 'ADD_NEW_SECTION_NOTIFICATION',
+              payload: {
+                sectionId: evolvedSection.SectionID,
+                name: evolvedSection.Name,
+                icon: evolvedSection.Icon,
+                sheetRef: evolvedSection.SheetRef,
+                message: `I reasoned through this entry and built ${evolvedSection.Name}. The decision is recorded in EvolutionLog.`,
+              },
+            });
+          }
+        } catch (error) {
+          console.warn('Evolution assessment failed:', error);
+        }
+      }
     } else queueFailedWrite('expense', expenseWithId, 'Expense');
     if (synced) dispatch({ type: 'SET_SYNC_STATUS', payload: { status: 'success', time: new Date().toISOString() } });
     return { synced, queued: !synced, expense: expenseWithId };

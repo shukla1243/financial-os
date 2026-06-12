@@ -39,8 +39,11 @@ export function queueSyncOperation(userId, type, payload) {
 async function execute(entry, proxyUrl, email) {
   if (entry.type === 'expense') {
     const result = await logExpense(proxyUrl, email, entry.payload);
-    const { autoLogExpenseToSections } = await import('./consciousnessEngine');
+    const { autoLogExpenseToSections, readBlueprint } = await import('./consciousnessEngine');
     await autoLogExpenseToSections(proxyUrl, email, entry.payload, []);
+    const { evolveFromExpense } = await import('./evolutionEngine');
+    const blueprint = await readBlueprint(proxyUrl, email);
+    await evolveFromExpense(proxyUrl, email, entry.payload, blueprint, {});
     return result;
   }
   if (entry.type === 'sectionExpense') {
