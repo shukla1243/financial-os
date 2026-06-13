@@ -43,3 +43,13 @@ test('savings reduce spendable buffer but do not inflate expenses', () => {
     savingsRate: '20.0',
   });
 });
+
+test('a goal withdrawal increases spendable buffer', () => {
+  expect(calculateSavingsAccounting({
+    totalIncome: 10000,
+    totalExpenses: 3000,
+    contributions: [{ month: 'Jun', year: 2026, amount: -5000 }],
+    month: 'Jun',
+    year: 2026,
+  }).buffer).toBe(12000);
+});

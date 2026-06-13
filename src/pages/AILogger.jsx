@@ -8,6 +8,7 @@ import { extractJsonObject } from '../services/aiJson';
 import { guardParsedActions } from '../services/aiActionGuard';
 import { buildClarifiedInput } from '../services/clarificationContext';
 import { formatDynamicModuleContext, loadDynamicModuleContext } from '../services/dynamicModuleContext';
+import { findByEntityId } from '../services/entityIdentity';
 
 function getCatIcon(cat) {
   const iconMap = {
@@ -624,17 +625,23 @@ export default function AILogger() {
     if (submittingActions[key]) return;
     setSubmittingActions(prev => ({ ...prev, [key]: true }));
     try {
-      const originalGoal = state.savingsGoals.find(g => g.id === goalUpdate.id);
+      const originalGoal = findByEntityId(state.savingsGoals, goalUpdate.id);
       if (!originalGoal) {
         setMessages(prev => [...prev, { role: 'ai', text: `❌ Could not find savings goal with ID ${goalUpdate.id}.` }]);
         setPendingGoals(prev => prev.filter(g => g !== goalUpdate));
         return;
       }
-      const updatedGoal = { ...originalGoal, saved: goalUpdate.saved };
+      const updatedGoal = { ...originalGoal, saved: Math.max(Number(goalUpdate.saved) || 0, 0) };
       await updateGoal(updatedGoal);
       setPendingGoals(prev => prev.filter(g => g !== goalUpdate));
       setLoggedCount(c => c + 1);
-      setMessages(prev => [...prev, { role: 'ai', text: `✅ Updated savings goal "${originalGoal.name}": Saved total is now ₹${goalUpdate.saved.toLocaleString()}.` }]);
+      const movement = updatedGoal.saved - Number(originalGoal.saved || 0);
+      setMessages(prev => [...prev, {
+        role: 'ai',
+        text: movement < 0
+          ? `✅ Withdrew ₹${Math.abs(movement).toLocaleString()} from "${originalGoal.name}". Goal balance is now ₹${updatedGoal.saved.toLocaleString()} and cash buffer increased by ₹${Math.abs(movement).toLocaleString()}.`
+          : `✅ Updated savings goal "${originalGoal.name}": Saved total is now ₹${updatedGoal.saved.toLocaleString()}.`,
+      }]);
     } catch (e) {
       console.error(e);
     } finally {

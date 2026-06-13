@@ -28,6 +28,7 @@ import { normalizeExpense, normalizeIncome } from '../services/transactionNormal
 import { flushSyncOutbox, queueSyncOperation } from '../services/syncOutbox';
 import { evolveFromExpense } from '../services/evolutionEngine';
 import { calculateSavingsAccounting, createGoalContribution, normalizeSavingsContribution } from '../services/savingsAccounting';
+import { findByEntityId, sameEntityId } from '../services/entityIdentity';
 
 const AppContext = createContext();
 
@@ -172,7 +173,7 @@ function reducer(state, action) {
     case 'ADD_INVESTMENT':
       return { ...state, investments: [...state.investments, { ...action.payload, id: action.payload.id || Date.now() }] };
     case 'UPDATE_GOAL':
-      return { ...state, savingsGoals: state.savingsGoals.map(g => g.id === action.payload.id ? { ...g, ...action.payload } : g) };
+      return { ...state, savingsGoals: state.savingsGoals.map(g => sameEntityId(g.id, action.payload.id) ? { ...g, ...action.payload, id: g.id } : g) };
     case 'ADD_GOAL':
       return { ...state, savingsGoals: [...state.savingsGoals, { ...action.payload, id: action.payload.id || Date.now() }] };
     case 'ADD_SAVINGS_CONTRIBUTION':
@@ -180,7 +181,7 @@ function reducer(state, action) {
     case 'SET_GOALS':
       return { ...state, savingsGoals: action.payload };
     case 'DELETE_GOAL':
-      return { ...state, savingsGoals: state.savingsGoals.filter(g => g.id !== action.payload) };
+      return { ...state, savingsGoals: state.savingsGoals.filter(g => !sameEntityId(g.id, action.payload)) };
     case 'UPDATE_BILL':
       return { ...state, billCalendar: state.billCalendar.map(b => b.id === action.payload.id ? { ...b, ...action.payload } : b) };
     case 'SET_SHEETS_CONFIG':
@@ -708,14 +709,15 @@ export function AppProvider({ children }) {
 
   // ─── UPDATE GOAL ─────────────────────────────────────────────────────────────
   const updateGoal = useCallback(async (goal) => {
-    const previousGoal = state.savingsGoals.find(g => g.id === goal.id);
-    const nextGoal = previousGoal ? { ...previousGoal, ...goal } : goal;
+    const previousGoal = findByEntityId(state.savingsGoals, goal.id);
+    if (!previousGoal) throw new Error(`Savings goal ${goal.id} was not found.`);
+    const nextGoal = { ...previousGoal, ...goal, id: previousGoal.id, saved: Math.max(Number(goal.saved) || 0, 0) };
     const contribution = createGoalContribution(previousGoal, nextGoal);
-    dispatch({ type: 'UPDATE_GOAL', payload: goal });
+    dispatch({ type: 'UPDATE_GOAL', payload: nextGoal });
     if (contribution) dispatch({ type: 'ADD_SAVINGS_CONTRIBUTION', payload: contribution });
     const { proxyUrl, connected } = state.sheetsConfig;
     const email = state.user?.email;
-    const updatedGoals = state.savingsGoals.map(g => g.id === goal.id ? { ...g, ...goal } : g);
+    const updatedGoals = state.savingsGoals.map(g => sameEntityId(g.id, goal.id) ? nextGoal : g);
     if (connected && proxyUrl && email) {
       await writeGoals(proxyUrl, email, updatedGoals).catch(() => queueFailedWrite('goals', updatedGoals, 'Goal update'));
       if (contribution) {
@@ -729,7 +731,7 @@ export function AppProvider({ children }) {
   }, [state.sheetsConfig, state.user, state.savingsGoals, queueFailedWrite]);
 
   const deleteGoal = useCallback(async (goalId) => {
-    const updatedGoals = state.savingsGoals.filter(goal => goal.id !== goalId);
+    const updatedGoals = state.savingsGoals.filter(goal => !sameEntityId(goal.id, goalId));
     dispatch({ type: 'DELETE_GOAL', payload: goalId });
     const { proxyUrl, connected } = state.sheetsConfig;
     const email = state.user?.email;
