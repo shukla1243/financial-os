@@ -142,7 +142,7 @@ function doPost(e) {
 
 function doGet(e) {
   // Health check
-  return jsonResponse({ success: true, status: 'Financial OS Backend Running', apiVersion: 5 });
+  return jsonResponse({ success: true, status: 'Financial OS Backend Running', apiVersion: 6 });
 }
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
@@ -297,7 +297,7 @@ function getUserSpreadsheetIdUnlocked(userId, email, name) {
   // Save to master registry
   const newRegistryRow = registrySheet.getLastRow() + 1;
   registrySheet.getRange(newRegistryRow, 2).setNumberFormat('@');
-  registrySheet.getRange(newRegistryRow, 1, 1, REGISTRY_SCHEMA.length).setValues([sanitizeRow([
+  registrySheet.getRange(newRegistryRow, 1, 1, REGISTRY_SCHEMA.length).setValues([fitRowToSchema([
     email,
     normalizeGoogleSubjectId(userId),
     userName,
@@ -307,8 +307,11 @@ function getUserSpreadsheetIdUnlocked(userId, email, name) {
     todayStr,
     todayStr,
     '',
-    'Free'
-  ])]);
+    'Free',
+    '',
+    '',
+    ''
+  ], REGISTRY_SCHEMA)]);
 
   return newSsId;
 }
@@ -1139,7 +1142,7 @@ function loadAll(ssId, email) {
 
     return {
       success: true,
-      apiVersion: 5,
+      apiVersion: 6,
       isAdmin: !!ADMIN_EMAIL && email.toLowerCase() === ADMIN_EMAIL.toLowerCase(),
       tracker: expensesResult.data,
       income: incomeResult.data,
@@ -1304,6 +1307,11 @@ function appendDynamicRow(ssId, email, tabName, rowData) {
 
 function sanitizeRow(row) {
   return row.map(sanitizeCell);
+}
+
+function fitRowToSchema(row, schema) {
+  const width = schema.length;
+  return sanitizeRow(Array.from({ length: width }, (_, index) => row[index] !== undefined ? row[index] : ''));
 }
 
 function sanitizeCell(value) {
