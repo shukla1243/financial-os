@@ -37,3 +37,34 @@ test('removes hallucinated bill and deletion actions', () => {
   expect(result.bills).toEqual([]);
   expect(result.deletions).toEqual([]);
 });
+
+test('removes historical expenses and income replayed during a goal withdrawal', () => {
+  const result = guardParsedActions(
+    {
+      expenses: Array.from({ length: 15 }, (_, index) => ({ amount: index + 1 })),
+      income: [{ amount: 1000 }, { amount: 2000 }],
+      goals: [{ id: 1, saved: 5000 }],
+    },
+    'took 5k from the goal because I was low on money',
+    { savingsGoals: [{ id: 1, name: 'Meeting Sneha' }] }
+  );
+  expect(result.expenses).toEqual([]);
+  expect(result.income).toEqual([]);
+  expect(result.goals).toEqual([{ id: 1, saved: 5000 }]);
+});
+
+test('asks which goal when a generic goal request is ambiguous', () => {
+  const result = guardParsedActions(
+    { goals: [{ id: 1, saved: 5000 }, { id: 2, saved: 2000 }] },
+    'took 1k from the goal',
+    { savingsGoals: [{ id: 1, name: 'Trip' }, { id: 2, name: 'Emergency' }] }
+  );
+  expect(result.goals).toEqual([]);
+  expect(result.needsClarification).toBe(true);
+  expect(result.clarificationQuestion).toContain('Trip');
+});
+
+test('keeps explicit expense and income actions', () => {
+  expect(guardParsedActions({ expenses: [{ amount: 100 }] }, 'spent 100 on lunch', {}).expenses).toHaveLength(1);
+  expect(guardParsedActions({ income: [{ amount: 5000 }] }, 'received 5000 salary', {}).income).toHaveLength(1);
+});

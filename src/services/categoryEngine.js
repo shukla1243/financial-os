@@ -224,7 +224,9 @@ ACTIONS TO SUPPORT:
 2. LOG INCOME: Received money (salary, freelance payment, gift). Parse into "income" array.
 3. UPDATE SAVINGS GOAL: Add money to a goal or set a goal target. Parse into "goals" array.
    - For adding money: calculate the new "saved" total (current saved + added amount) and return it, setting "action": "add", and "amount": added_amount.
+   - For taking money out or withdrawing: calculate the new "saved" total (current saved - withdrawn amount), never below zero, and return it with "action": "set" and a negative "amount".
    - Match the target goal's ID from the SAVINGS GOALS SHEET.
+   - If multiple goals exist and the user does not identify one, return needsClarification instead of guessing.
 4. PAY BILL: Mark a calendar bill as paid (e.g. "paid gym bill"). Match the bill ID from the BILL CALENDAR SHEET, set "status": "Paid", and return in "bills" array.
 5. DELETE EXPENSE / LIST DUPLICATES: If the user asks to delete a specific expense, or to list/find duplicate expenses so they can be deleted, find ALL exact matches or duplicates in the EXPENSE TRACKER SHEET and add EVERY SINGLE ONE OF THEM to the "deletions" array. If there are multiple duplicates, add each one as a separate object in the "deletions" array.
 6. HISTORICAL QUERIES, EDITS, & GENERAL CHAT: If the user asks questions about their records, asks about your capabilities (e.g., "do you have access to my sheet?", "what can you do?"), or just chats generally, formulate a friendly natural language response based on the sheets data provided above or your system prompt, and set:
@@ -232,6 +234,8 @@ ACTIONS TO SUPPORT:
    - "clarificationQuestion": "<Your complete, clear natural language response>"
 
 ACTION SAFETY:
+- Only return expenses when the latest user message explicitly describes spending or asks to log an expense.
+- Only return income when the latest user message explicitly describes receiving or earning money.
 - Return a goal update only when the user's latest message explicitly asks to update, add to, or set a savings goal.
 - Return a bill update only when the user's latest message explicitly says a bill was paid or asks to mark it paid.
 - Return deletions only when the user's latest message explicitly asks to delete, remove, undo, or find duplicates.
