@@ -267,6 +267,11 @@ export function reducer(state, action) {
             shadowIntensity: 'rgba(124, 58, 237, 0.15)',
           },
           budgets: action.payload.config?.budgets || {},
+          // The Config sheet's ActiveMonth/ActiveYear are written once at
+          // signup and never updated server-side, so always trust the wall
+          // clock here instead of the synced value.
+          activeMonth: state.config.activeMonth,
+          activeYear: state.config.activeYear,
         },
         profile: action.payload.profile || null,
         isOnboarded: action.payload.isOnboarded === true,
