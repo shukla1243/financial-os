@@ -98,7 +98,7 @@ const getInitialState = () => {
   return createDefaultState();
 };
 
-function reducer(state, action) {
+export function reducer(state, action) {
   switch (action.type) {
     case 'SET_USER':
       return { 
@@ -110,9 +110,18 @@ function reducer(state, action) {
     case 'SWITCH_USER': {
       const user = action.payload.user;
       const cached = action.payload.cached || {};
+      const freshDefaults = createDefaultState();
       return {
-        ...createDefaultState(),
+        ...freshDefaults,
         ...cached,
+        config: {
+          ...freshDefaults.config,
+          ...cached.config,
+          // The cached snapshot can be from a prior calendar month; always
+          // trust the wall clock for which month/year is "active", not the cache.
+          activeMonth: freshDefaults.config.activeMonth,
+          activeYear: freshDefaults.config.activeYear,
+        },
         user,
         isLoggedIn: true,
         isAuthReady: true,
