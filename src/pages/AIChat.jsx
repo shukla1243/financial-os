@@ -80,7 +80,11 @@ export default function AIChat() {
       .map(([name, value]) => `- ${name}: ${value.amount || 'variable'} (${value.category || 'uncategorized'})`)
       .join('\n');
 
+    const todayLabel = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
     return `You are the authenticated user's personal AI financial advisor inside Financial OS. Use only the user data provided below and never invent personal details or financial records.
+
+TODAY: ${todayLabel}. Always use this exact date when asked what today's date is — never guess or state a different one.
 
 PROFILE:
 Name: ${config.name || 'Not provided'}
