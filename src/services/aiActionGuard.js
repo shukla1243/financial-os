@@ -14,6 +14,22 @@ function mentionedItems(text, items) {
   });
 }
 
+const DATE_REFERENCE_PATTERN = /\b(today|yesterday|tomorrow|mon|tue|wed|thu|fri|sat|sun|monday|tuesday|wednesday|thursday|friday|saturday|sunday|jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec|january|february|march|april|june|july|august|september|october|november|december|days?\s*ago|last\s*(week|month))\b/;
+const DATE_NUMBER_PATTERN = /\b\d{1,2}(st|nd|rd|th)\b|\b\d{1,2}[\/-]\d{1,2}(?:[\/-]\d{2,4})?\b/;
+
+function hasExplicitDateReference(text) {
+  return DATE_REFERENCE_PATTERN.test(text) || DATE_NUMBER_PATTERN.test(text);
+}
+
+// The model is told today's real date but free-tier models routinely ignore it
+// and hallucinate a plausible-looking date anyway. If the user never referenced
+// a date, drop whatever the model guessed so normalizeExpense/normalizeIncome
+// fall back to the real current date instead of a hallucinated one.
+function clearUngroundedDate(item) {
+  const { date, month, year, day, ...rest } = item;
+  return rest;
+}
+
 export function guardParsedActions(result = {}, userText = '', state = {}) {
   const text = normalize(userText);
   const namedGoals = mentionedItems(text, state.savingsGoals);
@@ -40,11 +56,16 @@ export function guardParsedActions(result = {}, userText = '', state = {}) {
     ? (result.goals || []).filter(goal => allowedGoalIds.has(String(goal.id)))
     : [];
   const goalNeedsClarification = hasGoalIntent && (state.savingsGoals || []).length > 1 && namedGoals.length === 0;
+  const explicitDate = hasExplicitDateReference(text);
 
   return {
     ...result,
-    expenses: hasExpenseIntent ? result.expenses || [] : [],
-    income: hasIncomeIntent ? result.income || [] : [],
+    expenses: hasExpenseIntent
+      ? (result.expenses || []).map(expense => explicitDate ? expense : clearUngroundedDate(expense))
+      : [],
+    income: hasIncomeIntent
+      ? (result.income || []).map(income => explicitDate ? income : clearUngroundedDate(income))
+      : [],
     goals,
     bills: hasBillIntent
       ? (result.bills || []).filter(bill => allowedBillIds.has(String(bill.id)))

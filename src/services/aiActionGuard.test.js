@@ -91,6 +91,35 @@ test('keeps an expense stated as "paid X for Y" without the word "for"', () => {
   expect(result.expenses).toHaveLength(1);
 });
 
+test('clears a hallucinated expense date when the user never mentioned a date', () => {
+  const result = guardParsedActions(
+    { expenses: [{ amount: 6000, category: 'Housing', description: 'Rent', date: '2026-06-01', month: 'Jun', year: 2026, day: 'Mon' }] },
+    'paid rent 6k',
+    {}
+  );
+  expect(result.expenses[0].date).toBeUndefined();
+  expect(result.expenses[0].month).toBeUndefined();
+  expect(result.expenses[0].amount).toBe(6000);
+});
+
+test('keeps an AI-parsed expense date when the user explicitly referenced one', () => {
+  const result = guardParsedActions(
+    { expenses: [{ amount: 500, category: 'Food', description: 'Lunch', date: '2026-06-25', month: 'Jun', year: 2026, day: 'Thu' }] },
+    'spent 500 on lunch last thursday',
+    {}
+  );
+  expect(result.expenses[0].date).toBe('2026-06-25');
+});
+
+test('clears a hallucinated income date when the user never mentioned a date', () => {
+  const result = guardParsedActions(
+    { income: [{ amount: 20000, source: 'Client', date: '2026-06-01', month: 'Jun', year: 2026 }] },
+    'received 20000 from client',
+    {}
+  );
+  expect(result.income[0].date).toBeUndefined();
+});
+
 test('keeps explicit expense and income actions', () => {
   expect(guardParsedActions({ expenses: [{ amount: 100 }] }, 'spent 100 on lunch', {}).expenses).toHaveLength(1);
   expect(guardParsedActions({ income: [{ amount: 5000 }] }, 'received 5000 salary', {}).income).toHaveLength(1);
