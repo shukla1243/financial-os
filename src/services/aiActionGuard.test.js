@@ -64,6 +64,33 @@ test('asks which goal when a generic goal request is ambiguous', () => {
   expect(result.clarificationQuestion).toContain('Trip');
 });
 
+test('removes a bill payment whose id does not match the named bill in state', () => {
+  const result = guardParsedActions(
+    { bills: [{ id: 1, status: 'Paid' }] },
+    'paid my credit card bill 2922',
+    { billCalendar: [{ id: 1719835200000, name: 'Credit Card' }] }
+  );
+  expect(result.bills).toEqual([]);
+});
+
+test('keeps a bill payment whose id matches the named bill in state', () => {
+  const result = guardParsedActions(
+    { bills: [{ id: 1719835200000, status: 'Paid' }] },
+    'paid my credit card bill',
+    { billCalendar: [{ id: 1719835200000, name: 'Credit Card' }] }
+  );
+  expect(result.bills).toHaveLength(1);
+});
+
+test('keeps an expense stated as "paid X for Y" without the word "for"', () => {
+  const result = guardParsedActions(
+    { expenses: [{ amount: 5000, category: 'Housing', description: 'Rent' }] },
+    'paid rent 5k',
+    {}
+  );
+  expect(result.expenses).toHaveLength(1);
+});
+
 test('keeps explicit expense and income actions', () => {
   expect(guardParsedActions({ expenses: [{ amount: 100 }] }, 'spent 100 on lunch', {}).expenses).toHaveLength(1);
   expect(guardParsedActions({ income: [{ amount: 5000 }] }, 'received 5000 salary', {}).income).toHaveLength(1);
